@@ -92,6 +92,32 @@ function playerSavePath(worldId) {
   return fs.existsSync(file) ? file : null;
 }
 
+// --- hand-ticked progress ---------------------------------------------------
+// Categories like dungeons and treasure maps aren't recorded in the Palworld
+// save at all, so browser localStorage was their only home — clearing site data
+// wiped them. Keeping them in a file next to the server fixes that, and means
+// the same ticks appear in every browser on the machine.
+//
+// This is the *only* thing PalMap ever writes, and it writes to its own file.
+// Nothing here can touch a Palworld save: the path is a fixed constant, never
+// derived from the request.
+const PROGRESS_FILE = path.join(ROOT, 'progress.json');
+const MAX_BODY = 2 * 1024 * 1024;
+const WORLD_KEY = /^[A-Za-z0-9_\-/]{1,128}$/;
+
+const readProgress = () => {
+  try { return JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); }
+  catch { return {}; }
+};
+
+function writeProgress(all) {
+  // Write-then-rename: a crash mid-write leaves the old file intact rather than
+  // a truncated one.
+  const tmp = `${PROGRESS_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(all, null, 2));
+  fs.renameSync(tmp, PROGRESS_FILE);
+}
+
 // --- request handling -------------------------------------------------------
 const sendJson = (res, obj) => {
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -102,6 +128,42 @@ function handler(req, res) {
   const [rawPath, rawQuery] = req.url.split('?');
   const url = decodeURIComponent(rawPath);
   const params = new URLSearchParams(rawQuery || '');
+
+  // ---- hand-ticked progress (the only writable endpoint) ----
+  if (url === '/api/progress') {
+    const world = params.get('world') || 'default';
+    if (!WORLD_KEY.test(world)) { res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad world key'); return; }
+
+    if (req.method === 'GET') { sendJson(res, readProgress()[world] || { manual: [] }); return; }
+
+    if (req.method === 'POST') {
+      let body = '';
+      let aborted = false;
+      req.on('data', chunk => {
+        if (aborted) return;
+        body += chunk;
+        if (body.length > MAX_BODY) { aborted = true; res.writeHead(413).end('Too large'); req.destroy(); }
+      });
+      req.on('end', () => {
+        if (aborted) return;
+        try {
+          const parsed = JSON.parse(body);
+          const manual = Array.isArray(parsed.manual)
+            ? parsed.manual.filter(x => typeof x === 'string').slice(0, 50000)
+            : [];
+          const all = readProgress();
+          all[world] = { manual, updatedAt: new Date().toISOString() };
+          writeProgress(all);
+          sendJson(res, { ok: true, saved: manual.length });
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad payload');
+        }
+      });
+      return;
+    }
+    res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed');
+    return;
+  }
 
   // ---- read-only save API ----
   if (url === '/api/worlds') { sendJson(res, listWorlds()); return; }

@@ -92,6 +92,46 @@ let foundState = JSON.parse(localStorage.getItem(LS.foundState) || '{}');
 const isFound = id => auto.has(id) || manual.has(id);
 const stateOf = catId => foundState[catId] || 'dim';
 
+// --- hand-ticked progress ---------------------------------------------------
+// The ✋ categories aren't in the Palworld save, so localStorage used to be
+// their only home and clearing site data lost them. The server now keeps them
+// in its own progress.json — same trick that fixed auto-sync in Brave, applied
+// to the other direction. localStorage stays as a mirror so the manual
+// file-picker path still works with no server.
+let progressKey = null;
+let progressTimer = null;
+
+function persistManual() {
+  saveSet(LS.manual, manual);
+  if (!progressKey) return;
+  // Debounced: ticking several markers in a row is one write, not five.
+  clearTimeout(progressTimer);
+  progressTimer = setTimeout(() => {
+    fetch(`/api/progress?world=${encodeURIComponent(progressKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ manual: [...manual] }),
+    }).catch(() => { /* keep going; localStorage already has it */ });
+  }, 400);
+}
+
+async function loadManual(worldId) {
+  progressKey = worldId;
+  try {
+    const res = await fetch(`/api/progress?world=${encodeURIComponent(worldId)}`);
+    if (!res.ok) return;
+    const saved = (await res.json()).manual;
+    if (Array.isArray(saved) && saved.length) {
+      // The file is authoritative once it exists, otherwise un-ticking would
+      // be undone on the next reload.
+      manual = new Set(saved);
+      saveSet(LS.manual, manual);
+    } else if (manual.size) {
+      persistManual();   // first run: lift existing local ticks into the file
+    }
+  } catch { /* no server (file-picker mode) — localStorage carries on */ }
+}
+
 // --- map --------------------------------------------------------------------
 const map = L.map('map', {
   crs: L.CRS.Simple,
@@ -194,7 +234,7 @@ function openPopup(m, marker) {
     btn.textContent = found ? 'Mark as not found' : 'Mark as found';
     btn.onclick = () => {
       if (manual.has(m.id)) manual.delete(m.id); else manual.add(m.id);
-      saveSet(LS.manual, manual);
+      persistManual();
       applyVisibility();
       updateCounts();
       marker.closePopup();
@@ -263,10 +303,6 @@ applyZoomScale();
 const listEl = document.getElementById('categories');
 
 function updateCounts() {
-  // Only trackable categories belong in the headline total — counting chests and
-  // warp points would make the overall figure meaningless.
-  let totalFound = 0, totalTracked = 0;
-
   for (const cat of categories) {
     const mine = byCategory.get(cat.id);
     if (!mine?.length) continue;
@@ -278,15 +314,6 @@ function updateCounts() {
     }
     const bar = listEl.querySelector(`[data-bar="${cat.id}"]`);
     if (bar) bar.style.width = `${(found / mine.length) * 100}%`;
-    if (cat.saveFlag) { totalFound += found; totalTracked += mine.length; }
-  }
-
-  const bar = document.getElementById('progress-bar');
-  const label = document.getElementById('progress-label');
-  if (bar && label && totalTracked) {
-    const pct = Math.round((totalFound / totalTracked) * 100);
-    bar.style.width = `${pct}%`;
-    label.textContent = `${totalFound} / ${totalTracked} tracked collectibles · ${pct}%`;
   }
 }
 
@@ -513,6 +540,8 @@ async function selectWorld(i, isAuto = false) {
   const w = worlds[i];
   if (!w) return;
   localStorage.setItem(LS_WORLD, w.id);
+  // Hand-ticked progress is per-world, so it loads before the save sync paints.
+  await loadManual(w.id);
   try { await syncWorld(w, isAuto); }
   catch (err) { console.error(err); setStatus(err.message, 'err'); }
 }

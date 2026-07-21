@@ -132,17 +132,19 @@ button.link {
 }
 button.link:hover { color: var(--accent); }
 /* Sentence-case variant for links that are prose rather than a control label. */
-/* Reads as prose, so it needs the usual link affordances to look clickable. */
+/* Reads as prose, so it needs a link affordance — but the colour lives in the
+   underline only, so the text keeps its normal weight in the hierarchy. */
 button.link.plain {
   text-transform: none;
   letter-spacing: 0;
   font-size: 11.5px;
   text-align: left;
-  color: #7ab7f5;
+  color: var(--text);
   text-decoration: underline;
+  text-decoration-color: #7ab7f5;
   text-underline-offset: 2px;
 }
-button.link.plain:hover { color: #a5d0fa; }
+button.link.plain:hover { text-decoration-color: #a5d0fa; }
 
 /* ---- save controls ---- */
 .field { display: flex; flex-direction: column; gap: 5px; }
@@ -184,18 +186,6 @@ select:hover { border-color: var(--accent); }
 .status.ok { color: var(--found); }
 .status.err { color: #f87171; }
 .note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.45; }
-
-/* ---- overall progress ---- */
-.panel-progress { padding-top: 12px; padding-bottom: 12px; }
-.progress-track { height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
-.progress-fill {
-  height: 100%;
-  width: 0;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--found));
-  transition: width .3s ease;
-}
-.progress-label { margin: 7px 0 0; font-size: 11px; color: var(--muted); }
 
 /* ---- category list ---- */
 #categories { list-style: none; margin: 0; padding: 0; }
@@ -269,12 +259,16 @@ select:hover { border-color: var(--accent); }
 }
 #categories li:has(input:not(:checked)) .cat-bar i { opacity: .35; }
 
-/* Splits the auto-syncing categories from the manual ones. */
-.cat-divider {
+/* Splits the auto-syncing categories from the manual ones. Needs real space
+   above it — the preceding row ends in its own progress bar, and tight against
+   it the label collided.
+   The `#categories` prefix is load-bearing: `#categories li + li` sets
+   margin-top:1px and an ID selector would otherwise win over a bare class. */
+#categories li.cat-divider {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 12px 0 5px;
+  margin: 20px 0 8px;
   font-size: 9.5px;
   letter-spacing: .9px;
   text-transform: uppercase;
@@ -326,12 +320,12 @@ select:hover { border-color: var(--accent); }
 
 #sidebar footer { padding: 11px 16px; }
 .author {
-  color: var(--author, #D9711E);
+  color: inherit;
   text-decoration: underline;
   text-decoration-color: #D9711E;
   text-underline-offset: 2px;
 }
-.author:hover { filter: brightness(1.2); }
+.author:hover { color: var(--text); }
 /* ---- map ---- */
 #map { position: absolute; inset: 0; background: #0a0d13; }
 .leaflet-container { background: #0a0d13; }
