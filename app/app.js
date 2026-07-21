@@ -84,13 +84,17 @@ const map = L.map('map', {
   crs: L.CRS.Simple,
   minZoom: -4,
   maxZoom: 2,
-  zoomControl: true,
+  // Top-left is where the floating sidebar sits, so the zoom control moves over.
+  zoomControl: false,
   attributionControl: false,
 });
+L.control.zoom({ position: 'topright' }).addTo(map);
 
 const bounds = [[0, 0], [IMAGE, IMAGE]];
 L.imageOverlay('data/T_WorldMap.png', bounds).addTo(map);
-map.fitBounds(bounds);
+// The sidebar floats over the map's left edge, so bias the initial fit right by
+// its width — otherwise the island centres partly underneath it.
+map.fitBounds(bounds, { paddingTopLeft: [300, 0] });
 map.setMaxBounds([[-IMAGE * 0.1, -IMAGE * 0.1], [IMAGE * 1.1, IMAGE * 1.1]]);
 
 // --- load markers -----------------------------------------------------------
@@ -411,20 +415,33 @@ const stamp = mode => {
   if (el) el.textContent = `© Void Possum · v1.1 · ${mode}`;
 };
 
-async function syncWorld(w, auto = false) {
+// Palworld only flushes the save to disk on its own schedule, so hitting
+// Refresh right after picking something up legitimately finds nothing new.
+// Reporting the save's own write time is what tells the two cases apart —
+// without it "nothing changed" is indistinguishable from "the button is broken".
+async function syncWorld(w, isAuto = false) {
   const res = await fetch(`/api/save?world=${encodeURIComponent(w.id)}`);
   if (!res.ok) throw new Error(`Could not read the save (${res.status})`);
-  lastMtime = res.headers.get('X-Save-Mtime');
+
+  const mtime = Number(res.headers.get('X-Save-Mtime'));
+  const before = auto.size;
   const matched = syncFromBytes(new Uint8Array(await res.arrayBuffer()), w.name);
-  const at = new Date().toLocaleTimeString();
-  setStatus(`${auto ? 'Auto-synced' : 'Synced'} ${matched} markers from ${w.name} at ${at}`, 'ok');
+  const gained = auto.size - before;
+  lastMtime = mtime;
+
+  const saved = mtime ? new Date(mtime).toLocaleTimeString() : 'unknown';
+  const delta = gained > 0 ? ` (+${gained} new)` : '';
+  setStatus(
+    `${isAuto ? 'Auto-synced' : 'Synced'} ${matched} markers${delta} · game last saved ${saved}`,
+    'ok'
+  );
 }
 
-async function selectWorld(i, auto = false) {
+async function selectWorld(i, isAuto = false) {
   const w = worlds[i];
   if (!w) return;
   localStorage.setItem(LS_WORLD, w.id);
-  try { await syncWorld(w, auto); }
+  try { await syncWorld(w, isAuto); }
   catch (err) { console.error(err); setStatus(err.message, 'err'); }
 }
 

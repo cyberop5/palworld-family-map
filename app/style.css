@@ -26,13 +26,22 @@ html, body {
   overflow: hidden;
 }
 
-body { display: flex; }
+/* ---- sidebar ----
+   The sidebar floats over a full-bleed map rather than sitting beside it, so
+   the translucent background actually reveals terrain underneath.
 
-/* ---- sidebar ---- */
+   Deliberately no `backdrop-filter`. It looks better, but the map pans *under*
+   this panel, so the browser would have to re-blur the backdrop every frame —
+   the same class of per-frame rasterisation cost that took marker panning from
+   16.7ms to 86.7ms. Plain alpha composites for free. */
 #sidebar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 300px;
-  flex: 0 0 300px;
-  background: var(--panel);
+  z-index: 1000;
+  background: rgba(24, 28, 38, .84);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -143,7 +152,7 @@ select:hover { border-color: var(--accent); }
 #sidebar footer { padding: 14px 16px; margin-top: auto; }
 
 /* ---- map ---- */
-#map { flex: 1; height: 100%; background: #0a0d13; }
+#map { position: absolute; inset: 0; background: #0a0d13; }
 .leaflet-container { background: #0a0d13; }
 
 /* ---- markers ----
