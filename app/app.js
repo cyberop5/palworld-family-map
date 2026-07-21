@@ -298,6 +298,42 @@ document.getElementById('none-btn').onclick = () => setAllCategories(false);
 const statusEl = document.getElementById('sync-status');
 const setStatus = (msg, cls = '') => { statusEl.textContent = msg; statusEl.className = `status ${cls}`; };
 
+// Only GUID keys get their dashes stripped — note keys like "Day1-2" contain
+// meaningful dashes and must be left alone.
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}$/;
+
+// The one join used by every path (file picker, folder picker, auto-sync).
+function syncFromBytes(bytes, label) {
+  const save = parseSave(bytes);
+  const record = save.data?.SaveData?.RecordData;
+  if (!record) throw new Error('No RecordData — is this a player save (not Level.sav)?');
+
+  const flagSet = flag => new Set(
+    (record[flag] || []).filter(([, v]) => v === true).map(([k]) => {
+      const s = String(k).toLowerCase();
+      return GUID.test(s) ? s.replace(/-/g, '') : s;
+    })
+  );
+
+  const next = new Set();
+  let matched = 0;
+  for (const cat of categories) {
+    if (!cat.saveFlag) continue;
+    const flags = flagSet(cat.saveFlag);
+    for (const m of byCategory.get(cat.id) || []) {
+      if (flags.has(m.key)) { next.add(m.id); matched++; }
+    }
+  }
+
+  auto = next;
+  saveSet(LS.auto, auto);
+  if (label) localStorage.setItem(LS.profile, label);
+  applyVisibility();
+  updateCounts();
+  return matched;
+}
+
+// --- fallback: single-file picker (all browsers) ----------------------------
 document.getElementById('sync-btn').onclick = () => document.getElementById('sync-input').click();
 
 document.getElementById('sync-input').onchange = async e => {
@@ -305,36 +341,7 @@ document.getElementById('sync-input').onchange = async e => {
   if (!file) return;
   setStatus('Reading save…');
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const save = parseSave(bytes);
-    const record = save.data?.SaveData?.RecordData;
-    if (!record) throw new Error('No RecordData — is this a player save (not Level.sav)?');
-
-    // Only GUID keys get their dashes stripped — note keys like "Day1-2"
-    // contain meaningful dashes and must be left alone.
-    const GUID = /^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}$/;
-    const flagSet = flag => new Set(
-      (record[flag] || []).filter(([, v]) => v === true).map(([k]) => {
-        const s = String(k).toLowerCase();
-        return GUID.test(s) ? s.replace(/-/g, '') : s;
-      })
-    );
-
-    const next = new Set();
-    let matched = 0;
-    for (const cat of categories) {
-      if (!cat.saveFlag) continue;
-      const flags = flagSet(cat.saveFlag);
-      for (const m of byCategory.get(cat.id) || []) {
-        if (flags.has(m.key)) { next.add(m.id); matched++; }
-      }
-    }
-
-    auto = next;
-    saveSet(LS.auto, auto);
-    localStorage.setItem(LS.profile, file.name);
-    applyVisibility();
-    updateCounts();
+    const matched = syncFromBytes(new Uint8Array(await file.arrayBuffer()), file.name);
     setStatus(`Synced ${matched} found markers from ${file.name}`, 'ok');
   } catch (err) {
     console.error(err);
@@ -343,6 +350,117 @@ document.getElementById('sync-input').onchange = async e => {
     e.target.value = '';
   }
 };
+
+// --- server-backed sync (works in every browser) ----------------------------
+// A browser can only re-read a file unprompted via the File System Access API,
+// which Brave disables and Firefox never shipped. So the local server finds the
+// save folder and serves the bytes, and this just polls it: no folder picking,
+// no browser flags, identical behaviour everywhere.
+const els = {
+  worldField: document.getElementById('world-field'),
+  worldSelect: document.getElementById('world-select'),
+  syncActions: document.getElementById('sync-actions'),
+  refreshBtn: document.getElementById('refresh-btn'),
+  autoRow: document.getElementById('auto-row'),
+  autoToggle: document.getElementById('auto-toggle'),
+  autoInterval: document.getElementById('auto-interval'),
+  syncBtn: document.getElementById('sync-btn'),
+};
+
+const LS_WORLD = 'palmap.worldId';
+const LS_AUTO_ON = 'palmap.autoOn';
+const LS_AUTO_MINS = 'palmap.autoMins';
+
+let worlds = [];
+let lastMtime = null;
+let autoTimer = null;
+
+const currentWorld = () => worlds[Number(els.worldSelect.value)] || null;
+const worldLabel = w =>
+  `${w.name}${w.host ? ` — ${w.host}` : ''}${w.level != null ? ` (Lv ${w.level})` : ''}`;
+
+// Footer stamp — shows at a glance which app.js ran and which path is live.
+const stamp = mode => {
+  const el = document.getElementById('ver');
+  if (el) el.textContent = `© Void Possum · v1.1 · ${mode}`;
+};
+
+async function syncWorld(w, auto = false) {
+  const res = await fetch(`/api/save?world=${encodeURIComponent(w.id)}`);
+  if (!res.ok) throw new Error(`Could not read the save (${res.status})`);
+  lastMtime = res.headers.get('X-Save-Mtime');
+  const matched = syncFromBytes(new Uint8Array(await res.arrayBuffer()), w.name);
+  const at = new Date().toLocaleTimeString();
+  setStatus(`${auto ? 'Auto-synced' : 'Synced'} ${matched} markers from ${w.name} at ${at}`, 'ok');
+}
+
+async function selectWorld(i, auto = false) {
+  const w = worlds[i];
+  if (!w) return;
+  localStorage.setItem(LS_WORLD, w.id);
+  try { await syncWorld(w, auto); }
+  catch (err) { console.error(err); setStatus(err.message, 'err'); }
+}
+
+// The poll hits /api/status, which is a stat rather than a save parse, so
+// running it every minute costs nothing; the save is only re-read once its
+// timestamp actually moves.
+async function autoTick() {
+  const w = currentWorld();
+  if (!w) return;
+  try {
+    const res = await fetch(`/api/status?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) return;
+    const { mtime } = await res.json();
+    if (String(mtime) === String(lastMtime)) return;
+    await syncWorld(w, true);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function setupAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  localStorage.setItem(LS_AUTO_ON, els.autoToggle.checked ? '1' : '0');
+  localStorage.setItem(LS_AUTO_MINS, els.autoInterval.value);
+  if (els.autoToggle.checked) autoTimer = setInterval(autoTick, Number(els.autoInterval.value) * 60000);
+}
+
+fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
+  worlds = Array.isArray(list) ? list : [];
+  // No saves found (or not running under the local server) — leave the manual
+  // file picker as the primary control.
+  if (!worlds.length) { stamp('file mode'); return; }
+
+  els.worldSelect.innerHTML = '';
+  worlds.forEach((w, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = worldLabel(w);
+    els.worldSelect.appendChild(o);
+  });
+
+  els.worldField.hidden = false;
+  els.syncActions.hidden = false;
+  els.autoRow.hidden = false;
+  els.syncBtn.classList.remove('primary');
+  els.syncBtn.textContent = 'Or pick a .sav manually…';
+  stamp('auto-sync');
+
+  els.autoToggle.checked = (localStorage.getItem(LS_AUTO_ON) ?? '1') === '1';
+  els.autoInterval.value = localStorage.getItem(LS_AUTO_MINS) || '1';
+
+  els.worldSelect.onchange = () => selectWorld(Number(els.worldSelect.value));
+  els.refreshBtn.onclick = () => selectWorld(Number(els.worldSelect.value));
+  els.autoToggle.onchange = setupAuto;
+  els.autoInterval.onchange = setupAuto;
+
+  const remembered = localStorage.getItem(LS_WORLD);
+  const i = Math.max(0, worlds.findIndex(w => w.id === remembered));
+  els.worldSelect.value = String(i);
+  await selectWorld(i);
+  setupAuto();
+}).catch(err => { console.error(err); stamp('file mode'); });
 
 // --- export / import --------------------------------------------------------
 document.getElementById('export-btn').onclick = () => {

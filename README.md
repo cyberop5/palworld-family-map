@@ -12,27 +12,60 @@ npm install
 npm start
 ```
 
-Then open **http://localhost:5173/**
+The server prints the address to open, e.g. **http://localhost:5173/app/**
+
+If port 5173 is busy it automatically tries 5174, 5175… and prints whichever it got. To force a
+specific port, set `PORT`:
+
+```bash
+PORT=8080 npm start
+```
 
 ## Using it
 
-1. Click **Sync from save file**.
-2. Pick your player save from:
-   ```
-   %LOCALAPPDATA%\Pal\Saved\SaveGames\<SteamID>\<WorldID>\Players\<something>.sav
-   ```
-   Pick a file from `Players\` — not `Level.sav`.
-3. Everything the save knows about gets marked automatically. Click any other marker to
-   tick it off by hand.
+**There is nothing to set up.** The server finds your Palworld saves by itself, lists your worlds
+by name, picks the most recent player save, and syncs immediately when the page loads. Just open
+the page.
+
+- **World** — switch between saves. They're listed by their real names ("PP Island — Jim (Lv 48)"),
+  not the `8247F1A5…` folder ids.
+- **Auto-sync** — on by default, every minute. Play the game, and the map keeps up on its own.
+- **Refresh now** — force an immediate re-read.
+- Click any marker the save doesn't track to tick it off by hand.
 
 Use **Export progress** to keep a backup — progress otherwise lives only in this browser.
 
+If your saves live somewhere non-standard, point the server at them with `PAL_SAVES`:
+
+```bash
+PAL_SAVES="D:/some/other/SaveGames" npm start
+```
+
+There's also a manual **"Or pick a .sav manually…"** file picker as a fallback, which works even
+without the server.
+
 ### Is this safe to use?
 
-Yes. PalMap **only ever reads** your save file, and does so in the browser — nothing is
-uploaded and nothing is written back. It never touches the running game: no injection, no
-memory reading, no DLL, no UE4SS. Your Palworld install has no anti-cheat (no EasyAntiCheat,
-no BattlEye). You can leave the game running.
+Yes. PalMap **only ever reads** your save file — nothing is uploaded and nothing is written back.
+It never touches the running game: no injection, no memory reading, no DLL, no UE4SS. Your
+Palworld install has no anti-cheat (no EasyAntiCheat, no BattlEye). You can leave the game running,
+and auto-sync is just a file read on a timer.
+
+The local server exposes three read-only endpoints (`/api/worlds`, `/api/status`, `/api/save`) so
+that auto-sync works in browsers without the File System Access API. They are deliberately
+constrained:
+
+- the server binds to **127.0.0.1 only**, so it is not reachable from your network;
+- it **only reads** — there is no write path at all;
+- every requested path is validated and re-checked to stay inside the save folder, so it cannot be
+  path-traversed into the rest of your disk.
+
+### Why a server API instead of doing it in the browser?
+
+A browser can only re-read a file unprompted through the File System Access API. Chrome and Edge
+have it; **Brave disables it** and Firefox never shipped it. Doing the file reading in the local
+Node server instead means auto-sync works identically in every browser, with no flags and no folder
+picking.
 
 ## How it works
 
@@ -155,7 +188,7 @@ src/
   palsave.mjs   .sav container -> GVAS bytes   (shared: browser + node)
   gvas.mjs      GVAS property reader
 extract/        one-off data pipeline + calibration
-server.mjs      static server
+server.mjs      static server + read-only save API (PORT / PAL_SAVES env vars)
 ```
 
 ## Credits

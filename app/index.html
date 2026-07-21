@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PalMap — Palworld progress tracker</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=1.1">
 <script src="vendor/leaflet.js"></script>
 <script type="importmap">
 { "imports": { "ooz-wasm": "./vendor/ooz-wasm/index.js" } }
@@ -20,6 +20,26 @@
   </header>
 
   <div class="panel">
+    <label class="field" id="world-field" hidden>
+      <span class="field-label">World</span>
+      <select id="world-select"></select>
+    </label>
+
+    <div class="row" id="sync-actions" hidden>
+      <button id="refresh-btn">Refresh now</button>
+    </div>
+
+    <label class="check auto-row" id="auto-row" hidden>
+      <input type="checkbox" id="auto-toggle" checked>
+      <span>Auto-sync every</span>
+      <select id="auto-interval">
+        <option value="1" selected>1 min</option>
+        <option value="2">2 min</option>
+        <option value="5">5 min</option>
+        <option value="10">10 min</option>
+      </select>
+    </label>
+
     <button id="sync-btn" class="primary">Sync from save file</button>
     <input type="file" id="sync-input" accept=".sav" hidden>
     <p id="sync-status" class="status"></p>
@@ -48,12 +68,12 @@
 
   <footer>
     <p class="note">Reads your save read-only. Nothing is uploaded.</p>
-    <p class="note">© Void Possum</p>
+    <p class="note" id="ver">© Void Possum · v1.1</p>
   </footer>
 </aside>
 
 <div id="map"></div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=1.1"></script>
 </body>
 </html>
