@@ -15,6 +15,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseSave } from './src/palsave.mjs';
 
@@ -171,10 +172,20 @@ function listen(i = 0) {
 
   // 127.0.0.1 only: the save API must never be reachable from the network.
   server.listen(port, '127.0.0.1', () => {
-    console.log(`\nPalMap running at  http://localhost:${port}/app/`);
+    const url = `http://localhost:${port}/app/`;
+    console.log(`\nPalMap running at  ${url}`);
     console.log(SAVES && fs.existsSync(SAVES)
       ? `Reading saves from ${SAVES}`
       : `No Palworld save folder found${SAVES ? ` at ${SAVES}` : ''} — set PAL_SAVES, or use the manual file picker in the page.`);
+
+    // The launcher sets PALMAP_OPEN so the browser lands on the port we
+    // actually got — the launcher can't know that in advance if 5173 was busy.
+    if (process.env.PALMAP_OPEN) {
+      const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+        : process.platform === 'darwin' ? ['open', [url]]
+          : ['xdg-open', [url]];
+      spawn(cmd[0], cmd[1], { stdio: 'ignore', detached: true }).unref();
+    }
   });
 }
 

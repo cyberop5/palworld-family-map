@@ -1,249 +1,88 @@
-# PalMap — auto-tracking collectible map for Palworld
+# PalMap
 
-**A companion map that ticks itself off.** PalMap reads your Palworld save and marks what you've
-already collected — effigies, bosses, fast-travel points, watchtowers, notes and item pickups —
-then keeps up with you while you play.
+**A Palworld map that ticks itself off.**
 
-Runs locally. No account, no upload, no subscription.
+PalMap reads your save file and marks everything you've already collected — effigies, bosses,
+fast travel points, watchtowers, notes and pickups. Keep it open while you play and it updates
+itself.
 
-It's a **completion tracker, not an encyclopaedia.** It deliberately covers the things you
-*finish* — the ~760 collectibles the game records in your save — rather than the thousands of
-respawning chests, eggs, ore nodes and fishing spots that can never be completed and would bury
-the island in pins. Every category is labelled in the sidebar with whether it auto-syncs (⟳) or is
-ticked by hand (✋), so nothing looks broken.
+## Getting started
 
-## Running it
+**1. Install Node.js** (one time, only if you don't have it)
+Go to [nodejs.org](https://nodejs.org), download the big green **LTS** button, install it.
 
-```bash
-npm install
-npm start
-```
+**2. Double-click `Start PalMap.bat`**
 
-The server prints the address to open, e.g. **http://localhost:5173/app/**
+That's it. A black window opens, your browser opens the map, and your progress is already filled
+in. The first run takes an extra minute to set itself up.
 
-If port 5173 is busy it automatically tries 5174, 5175… and prints whichever it got. To force a
-specific port, set `PORT`:
+Leave the black window open while you use the map. Close it when you're done.
 
-```bash
-PORT=8080 npm start
-```
+> On Mac or Linux there's no `.bat` — open a terminal in this folder and run `npm install` once,
+> then `npm start`.
 
 ## Using it
 
-**There is nothing to set up.** The server finds your Palworld saves by itself, lists your worlds
-by name, picks the most recent player save, and syncs immediately when the page loads. Just open
-the page.
+Your save is found automatically — there's nothing to configure.
 
-- **World** — switch between saves. They're listed by their real names ("PP Island — Jim (Lv 48)"),
-  not the `8247F1A5…` folder ids.
-- **Auto-sync** — on by default, every minute. Play the game, and the map keeps up on its own.
-- **Refresh now** — force an immediate re-read.
-- Click any marker the save doesn't track to tick it off by hand.
+- **Save** — pick which world, if you have more than one. They're listed by name.
+- **Auto-sync** — on by default. It re-checks every minute while you play.
+- **Refresh** — check right now instead of waiting.
+- **Categories** — tick a box to show or hide that kind of marker on the map.
+- Click any marker to mark it found by hand.
 
-Use **Export progress** to keep a backup — progress otherwise lives only in this browser.
+Next to each category you'll see one of two symbols:
 
-If your saves live somewhere non-standard, point the server at them with `PAL_SAVES`:
-
-```bash
-PAL_SAVES="D:/some/other/SaveGames" npm start
-```
-
-There's also a manual **"Or pick a .sav manually…"** file picker as a fallback, which works even
-without the server.
-
-### Is this safe to use?
-
-Yes. PalMap **only ever reads** your save file — nothing is uploaded and nothing is written back.
-It never touches the running game: no injection, no memory reading, no DLL, no UE4SS. Your
-Palworld install has no anti-cheat (no EasyAntiCheat, no BattlEye). You can leave the game running,
-and auto-sync is just a file read on a timer.
-
-The local server exposes three read-only endpoints (`/api/worlds`, `/api/status`, `/api/save`) so
-that auto-sync works in browsers without the File System Access API. They are deliberately
-constrained:
-
-- the server binds to **127.0.0.1 only**, so it is not reachable from your network;
-- it **only reads** — there is no write path at all;
-- every requested path is validated and re-checked to stay inside the save folder, so it cannot be
-  path-traversed into the rest of your disk.
-
-### Why a server API instead of doing it in the browser?
-
-A browser can only re-read a file unprompted through the File System Access API. Chrome and Edge
-have it; **Brave disables it** and Firefox never shipped it. Doing the file reading in the local
-Node server instead means auto-sync works identically in every browser, with no flags and no folder
-picking.
-
-## How it works
-
-Palworld v0.6+ saves use the `PlM` container: a small header wrapping an **Oodle Kraken**
-compressed [GVAS](https://github.com/cheahjs/palworld-save-tools) blob. This is why
-`palworld-save-tools` and most save editors fail on current saves — they only handle the older
-zlib-based `PlZ`. PalMap decompresses Oodle in the browser via
-[`ooz-wasm`](https://www.npmjs.com/package/ooz-wasm) (the uncompressed size sits in the header,
-which is exactly what the decompressor needs), then parses the GVAS properties directly.
-
-Progress lives in the **player** save under `RecordData`, so `Level.sav` is never needed —
-which also means none of Palworld's custom binary blobs have to be decoded.
-
-Markers join to save flags two ways:
-
-| Category | Save flag | Joins on |
-|---|---|---|
-| Effigy | `RelicObtainForInstanceFlag` **+** `RelicObtainForInstanceFlagByType` | `LevelObjectInstanceId` (GUID) |
-| Fast Travel | `FastTravelPointUnlockFlag` | `LevelObjectInstanceId` (GUID) |
-| Item Pickup | `ItemPickupObtainForInstanceFlag` | `LevelObjectInstanceId` (GUID) |
-| Tower Boss | `TowerBossDefeatFlag` | `BOSS_BATTLE_NAME_<BossType>` |
-| Alpha Pal | `NormalBossDefeatFlag` | spawner name (`SpawnerType: FieldBoss`) |
-| Caged Boss | `NormalBossDefeatFlag` | spawner name (`SpawnerType: ImprisonmentBoss`) |
-| Note | `NoteObtainForInstanceFlag` | `NoteRowName` |
-| Watchtower | `FastTravelPointUnlockFlag` | `LevelObjectInstanceId` (GUID) |
-
-**Watchtowers are fast-travel points.** `BP_LevelObject_UnlockMapPoint_C` — the tower you activate
-to reveal a chunk of map — carries a `FastTravelPointID`, so the game records it under
-`FastTravelPointUnlockFlag` alongside ordinary fast-travel statues. Missing them was why a test
-save had 10 unlock flags with no marker to attach to; adding the category took fast travel from
-58/68 matched to **70/70, zero orphans**.
-
-Treasure Maps, Warp Points, Respawn Points and Dungeons have **no per-instance save flag**, so they
-are reference markers only — the sidebar marks them ✋ and they are ticked by hand.
-
-Alpha Pals and Caged Bosses share one save flag but are different things in game — a roaming
-Alpha versus one held in a syndicate camp — so they're separate categories with separate counters.
-
-**Effigies are recorded in two places, and both must be read.** The flat
-`RelicObtainForInstanceFlag` only ever holds the classic Lifmunk (`CapturePower`) relics. Since 1.0
-each effigy variant is its own relic type with its own perk, stored in
-`RelicObtainForInstanceFlagByType` as `{ Type, Flags: [[guid, bool], …] }`:
-
-| Relic type | Effigy |
+| | |
 |---|---|
-| `CapturePower` | Lifmunk |
-| `HungerReduction` | Lamball |
-| `FoodDecayReduction` | Munchill |
-| `SwimSpeed` | Pengullet |
-| `ClimbSpeed` | Tanzee |
-| `SphereHoming` | Lunaris |
-| `ExpBonus` | Relaxaurus |
+| ⟳ | **Fills in automatically** from your save. |
+| ✋ | **You tick these yourself** — Palworld doesn't record them, so nothing can detect them. |
 
-Reading only the flat list silently under-counts — it found 23 of a test save's 45 effigies, and
-every non-Lifmunk one stayed unticked. `recordKeys()` in `app/app.js` handles both shapes.
+The **●** button next to each category decides what happens to things you've already found:
+**●** keep showing them, **◐** fade them, **○** hide them. Shift-click to change every category
+at once.
 
-## Regenerating the map data
+## Common questions
 
-Only needed if Palworld updates and adds new locations. See **[EXTRACTING.md](EXTRACTING.md)**
-for the FModel walkthrough, then:
+**Is this safe? Will I get banned?**
+No. PalMap only *reads* your save file — it never changes it, never touches the game, and never
+sends anything anywhere. Palworld has no anti-cheat. You can leave the game running.
 
-```bash
-node extract/build-markers.mjs           # FModel exports -> app/data/markers.json
-node extract/merge-bosses.mjs            # spawner datatables -> field bosses + portraits
-node extract/merge-cell.mjs itemPickup <cell.json>   # one World Partition cell at a time
-node extract/merge-notes.mjs             # note locations (transcribed, see the script)
-node extract/assign-effigy-icons.mjs     # attach Pal portraits to effigies
-node extract/verify-join.mjs             # check markers against a real save
-node extract/calibrate.mjs               # refit world->image transform, overlay in work/
-```
+**Do I have to close Palworld?**
+No. Play normally and the map keeps up.
 
-Everything after `build-markers.mjs` merges into an existing `markers.json` rather than
-rebuilding it, so each can be re-run on its own without re-exporting the level.
+**I collected something and it didn't appear.**
+Palworld only writes your save to disk every few minutes. The status line tells you when the game
+last saved — if that time is older than when you picked the thing up, wait a moment and it'll
+turn up on the next sync.
 
-The transform in `app/app.js` was fitted by `calibrate.mjs`: it places 97.4% of
-known-on-land markers on land pixels, and the fitted world box is square to within 1%,
-as a square texture requires. `diagnose-offset.mjs` later found a residual ~11px westward
-drift confined to the far-eastern edge (invisible on the mainland, but obvious on small
-eastern islands like Arena Entrance); `maxY` is tightened slightly to null it there while
-keeping the rest within ~2px. The marker *data* is provably exact — converting a fast-travel
-point's world coords through Palworld's documented in-game-map formula reproduces the exact
-coordinate the game shows for it (e.g. Arena Entrance → 629, 14).
+**Where is my progress stored?**
+In your browser, on your machine. Use **Export progress** to save a backup file, and **Import** to
+restore it or move it to another computer.
 
-## Using the map
+**Nothing shows up / it can't find my save.**
+Use *"Or pick a .sav file manually…"* and choose a file from:
+`AppData\Local\Pal\Saved\SaveGames\<numbers>\<numbers>\Players\`
 
-Each category row has a **●/◐/○ button** controlling what happens to markers you've already
-found, independently per category — so you can hide found effigies while keeping found fast-travel
-points on screen. Click cycles shown → dimmed → hidden; **shift-click sets every category at
-once**. The checkbox beside it still toggles the whole category. Both persist per browser.
+**Can my friend use it?**
+Yes — send them this whole folder. Everything needed is included.
 
-## Marker icons
+## What it tracks
 
-Fast travel, dungeons, towers and item pickups use the **game's own compass icons** from
-`Texture/UI/InGame` — the same glyphs Palworld draws on its HUD. Effigies and bosses show the
-actual Pal portrait (`Texture/PalIcon`, 128×128) instead, because that tells you *which* Pal, which
-a generic icon can't. Notes have no counterpart anywhere in the UI textures, so they keep a drawn
-SVG glyph.
+Roughly 760 collectibles that you can actually *finish*:
 
-Effigy portraits are matched via a display-name → internal-codename table in
-`extract/assign-effigy-icons.mjs` — the game labels them "Lamball Effigy" but the icon file is
-`T_SheepBall_icon_normal.png`.
+Effigies · Alpha Pals · Caged Bosses · Tower Bosses · Fast Travel · Watchtowers · Notes ·
+Item Pickups · Dungeons · Treasure Maps · Warp Points
 
-Pins scale with zoom via a single `--pin-scale` CSS variable, so ~900 markers don't bury the
-island at full-map zoom without needing to resize every icon in the DOM.
-
-## Rendering performance
-
-Panning went from **86.7 ms/frame to 16.7 ms** (≈11 fps → 60 fps). Nearly all of it was one line:
-`filter: drop-shadow` on the marker pins. A CSS filter forces the browser to re-rasterize each
-element every time the marker pane composites — once per frame while panning. Contrast now comes
-from opaque backdrops, which composite for free.
-
-Two smaller traps worth remembering if this code is touched again:
-
-- **Don't put `transition` on a pin's base rule.** `--pin-scale` changes on zoom, so a base-rule
-  transition animates ~900 elements simultaneously — a 368 ms hitch. It's declared on `:hover` only.
-- **Viewport culling made it worse, and was removed.** It cut the DOM from ~900 markers to ~345,
-  but the bulk add/remove on every `moveend` cost a 158 ms hitch — far more than the smooth
-  full-set render costs. See the comment on `applyVisibility()` in `app/app.js`.
-- **Icons inside a grid pin need `min-width: 0; min-height: 0`.** Grid items default to
-  `min-width: auto`, so the track grows to the image's intrinsic size (100 px for the compass
-  PNGs) and a percentage width resolves against *that*, not the pin. Without it the icons render
-  ~3× their pin and overflow it — which is exactly how they shipped until it was measured.
-
-## Known gaps
-
-- **Field boss names show internal codenames** ("Volcanic Monster" instead of "Blazamut").
-  Re-running `merge-bosses.mjs` now that `DT_PalNameText_Common` is exported would fix it.
-- **Field bosses match 20 of 27.** The remaining 7 are *human* bosses (`BOSS_Hunter_Rifle`,
-  `BOSS_Male_Soldier`…) which aren't in the Pal spawner tables at all.
-- **Skill fruit, chests, eggs, resource nodes and fishing spots aren't included.** They live in
-  fine-grained World Partition cells — 46, 1427, 649, 849 and 457 cells respectively — so adding
-  them means exporting the whole `MainWorld_5` folder (~1 hour, ~23 GB). None of them has a save
-  flag either (they respawn), so they could only ever be reference markers. `work/type-cells.json`
-  from `merge-locations.mjs` lists exactly which cells hold what, if it's ever worth doing.
-- **Herbil / Munchill / Yakumo effigy portraits are now confirmed**, not inferred — checked
-  against `DT_PalNameText_Common` (`LeafMomonga`, `IceCrocodile`, `GuardianDog`).
-- **Herbil / Munchill effigy portraits are inferred** by elimination from `LeafMomonga` /
-  `IceCrocodile`. If they look swapped in game, swap them in `assign-effigy-icons.mjs`.
-- **Chests, eggs and skill fruit** aren't included. They're respawning spawners (~9,000 of them),
-  so they can't be "completed" — they'd be reference markers only.
-- The **World Tree** is a separate map with its own texture (`T_TreeMap`); its markers are
-  filtered out rather than shown.
-
-## Layout
-
-```
-app/            static browser app (no build step)
-  app.js        map, sidebar, sync, import/export
-  data/         markers.json + T_WorldMap.png + icons  (generated, committed)
-src/
-  palsave.mjs   .sav container -> GVAS bytes   (shared: browser + node)
-  gvas.mjs      GVAS property reader
-extract/        one-off data pipeline + calibration
-server.mjs      static server + read-only save API (PORT / PAL_SAVES env vars)
-```
+It deliberately leaves out chests, eggs, ore and fishing spots. Those respawn forever, so they can
+never be completed — and there are thousands of them, which would bury the island in icons.
 
 ## Credits
 
-Marker extraction approach follows
-[ARXII-13/Palworld-Interactive-Map](https://github.com/ARXII-13/Palworld-Interactive-Map)
-(Apache-2.0). Oodle decompression by [ooz-wasm](https://github.com/SnosMe/ooz-wasm) (GPL-3.0);
-PalMap is GPL-3.0 as a result.
+Made by **Void Possum**. Free and open source ([GPL-3.0](https://www.gnu.org/licenses/gpl-3.0)).
 
-## Game assets
+Map and icons belong to **Pocketpair, Inc.**, used here for a free fan tool.
+Save decompression by [ooz-wasm](https://github.com/SnosMe/ooz-wasm); map by
+[Leaflet](https://leafletjs.com).
 
-The map texture, marker data and Pal icons under `app/data/` are extracted from Palworld and are
-included here so the map works on a fresh clone with no extraction step. They remain the property
-of **Pocketpair, Inc.** and are used here under fair community use: PalMap is free, open-source and
-non-monetised, and does not compete with or reproduce the game. Many community tools ship the same
-assets on the same basis. If you fork this, keep it free and non-commercial. To regenerate the
-assets yourself from your own install instead, see [EXTRACTING.md](EXTRACTING.md).
-
-© Void Possum
+Curious how it works, or want to change it? See **[TECHNICAL.md](TECHNICAL.md)**.

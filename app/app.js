@@ -133,6 +133,24 @@ for (const m of markers) byCategory.get(m.category)?.push(m);
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Sidebar icons for the categories whose *map* pins are per-Pal portraits, so
+// there's no single pin image to reuse. Effigies borrow Lifmunk — the classic
+// one — and the bosses use the game's own compass crests.
+const CAT_ICON = {
+  effigy: 'icons/T_Carbunclo_icon_normal.png',
+  alphaPal: 'icons/ui/T_icon_compass_boss.png',
+  cagedBoss: 'icons/ui/T_icon_compass_KeyBoss.png',
+};
+
+function categorySwatch(id, colour) {
+  const src = CAT_ICON[id] || (ICONS[id] ? `icons/ui/${ICONS[id]}` : null);
+  if (src) return `<img class="cat-icon" src="data/${src}" alt="" decoding="async">`;
+  // Notes have no icon anywhere in the game's UI textures, so the sidebar
+  // reuses the same drawn glyph the map pin uses.
+  if (GLYPHS[id]) return `<svg class="cat-icon" viewBox="0 0 24 24" style="fill:${colour}">${GLYPHS[id]}</svg>`;
+  return `<span class="dot" style="background:${colour}"></span>`;
+}
+
 function pinFor(m) {
   const color = COLORS[m.category] || '#94a3b8';
   const size = sizeFor(m.category);
@@ -287,13 +305,8 @@ for (const cat of categories) {
     ? `<span class="sync-badge" title="Supports auto-sync — these tick themselves from your save file">⟳</span>`
     : `<span class="sync-badge manual" title="Manual only — Palworld doesn't record these in the save, so tick them by hand">✋</span>`;
 
-  // Show the category's real map icon where it has one. Categories whose
-  // markers are per-Pal portraits (effigies, bosses) have no single icon, so
-  // they keep a colour swatch that matches their pins.
   const colour = COLORS[cat.id] || '#94a3b8';
-  const swatch = ICONS[cat.id]
-    ? `<img class="cat-icon" src="data/icons/ui/${ICONS[cat.id]}" alt="" decoding="async">`
-    : `<span class="dot" style="background:${colour}"></span>`;
+  const swatch = categorySwatch(cat.id, colour);
 
   const li = document.createElement('li');
   li.innerHTML = `

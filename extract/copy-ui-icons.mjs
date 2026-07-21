@@ -20,6 +20,12 @@ const ICONS = {
   dungeon: 'T_icon_compass_dungeon.png',           // cave arch
   towerBoss: 'T_icon_compass_tower.png',           // syndicate tower crest
   itemPickup: 'T_icon_compass_Search_Treasure.png', // framed crate
+
+  // Sidebar only. These categories draw per-Pal portraits on the map (which
+  // tell you *which* Pal), but the category row needs one icon to stand for
+  // the whole group.
+  alphaPal: 'T_icon_compass_boss.png',
+  cagedBoss: 'T_icon_compass_KeyBoss.png',
 };
 
 fs.mkdirSync(OUT, { recursive: true });
