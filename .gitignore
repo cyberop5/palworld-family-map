@@ -9,3 +9,6 @@ progress.json
 /FModel.exe
 Output/
 extract/fmodel-export/
+
+# Local editor/preview config, not needed to run PalMap.
+.claude/
