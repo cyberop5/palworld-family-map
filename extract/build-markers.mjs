@@ -67,7 +67,7 @@ const CATEGORIES = [
   },
   {
     id: 'itemPickup',
-    name: 'Item Pickup',
+    name: 'Item',
     saveFlag: 'ItemPickupObtainForInstanceFlag',
     cells: ['MainGrid_L15_X0_Y0_DLC881EFB3'],
     match: t => /^BP_LevelObject_ItemPickup/.test(t),

@@ -276,6 +276,8 @@ function updateCounts() {
       el.textContent = `${found} / ${mine.length}`;
       el.classList.toggle('done', found === mine.length);
     }
+    const bar = listEl.querySelector(`[data-bar="${cat.id}"]`);
+    if (bar) bar.style.width = `${(found / mine.length) * 100}%`;
     if (cat.saveFlag) { totalFound += found; totalTracked += mine.length; }
   }
 
@@ -295,9 +297,22 @@ function paintFoundBtn(btn, catId) {
   btn.title = `${FOUND_TITLE[s]} — click to cycle, shift-click to set every category`;
 }
 
-for (const cat of categories) {
+// Auto-syncing categories first, then the manual ones under a divider. Mixed
+// together, a ✋ category stuck on 0 just looks broken.
+const orderedCats = [...categories].sort((a, b) => (a.saveFlag ? 0 : 1) - (b.saveFlag ? 0 : 1));
+let dividerDone = false;
+
+for (const cat of orderedCats) {
   const mine = byCategory.get(cat.id);
   if (!mine?.length) continue;
+
+  if (!cat.saveFlag && !dividerDone) {
+    const sep = document.createElement('li');
+    sep.className = 'cat-divider';
+    sep.innerHTML = '<span>Tick by hand</span>';
+    listEl.appendChild(sep);
+    dividerDone = true;
+  }
 
   // Only categories with a save flag can tick themselves; the rest are manual.
   // Saying so inline stops "why didn't my treasure maps update?" before it starts.
@@ -319,7 +334,8 @@ for (const cat of categories) {
         <span class="count" data-count="${cat.id}"></span>
       </label>
       <button class="found-btn" data-found="${cat.id}"></button>
-    </div>`;
+    </div>
+    <div class="cat-bar"><i data-bar="${cat.id}"></i></div>`;
   listEl.appendChild(li);
 
   li.querySelector('input').addEventListener('change', e => {
@@ -466,7 +482,9 @@ const worldLabel = w =>
 // Footer stamp — shows at a glance which app.js ran and which path is live.
 const stamp = mode => {
   const el = document.getElementById('ver');
-  if (el) el.textContent = `© Void Possum · v1.2 · ${mode}`;
+  if (el) el.innerHTML =
+    `<a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>`
+    + ` · v1.2 · ${escapeHtml(mode)}`;
 };
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
@@ -561,40 +579,6 @@ fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
   setupAuto();
 }).catch(err => { console.error(err); stamp('file mode'); });
 
-// --- export / import --------------------------------------------------------
-document.getElementById('export-btn').onclick = () => {
-  const blob = new Blob([JSON.stringify({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    manual: [...manual],
-    auto: [...auto],
-  }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `palmap-progress-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
-
-document.getElementById('import-btn').onclick = () => document.getElementById('import-input').click();
-document.getElementById('import-input').onchange = async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    manual = new Set(data.manual || []);
-    auto = new Set(data.auto || []);
-    saveSet(LS.manual, manual);
-    saveSet(LS.auto, auto);
-    applyVisibility();
-    updateCounts();
-    setStatus(`Imported progress from ${file.name}`, 'ok');
-  } catch (err) {
-    setStatus(`Import failed: ${err.message}`, 'err');
-  } finally {
-    e.target.value = '';
-  }
-};
 
 const profile = localStorage.getItem(LS.profile);
 if (profile) setStatus(`Last synced from ${profile}`);

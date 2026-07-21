@@ -36,13 +36,17 @@ html, body {
    16.7ms to 86.7ms. Plain alpha composites for free. */
 #sidebar {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  left: 12px;
+  top: 12px;
   width: 296px;
+  /* Height follows content — it's a panel, not a wall. Capped so a long
+     category list still scrolls instead of running off screen. */
+  max-height: calc(100% - 24px);
   z-index: 1000;
   background: rgba(20, 24, 33, .88);
-  border-right: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -62,7 +66,10 @@ html, body {
   padding: 14px 16px 12px;
   background: rgba(20, 24, 33, .95);
   border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
 }
+/* The last block shouldn't draw a separator against the card's own edge. */
+.panel:last-of-type { border-bottom: 0; }
 #sidebar h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: .3px; }
 #sidebar h1::first-letter { color: var(--accent); }
 .tagline { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
@@ -125,7 +132,17 @@ button.link {
 }
 button.link:hover { color: var(--accent); }
 /* Sentence-case variant for links that are prose rather than a control label. */
-button.link.plain { text-transform: none; letter-spacing: 0; font-size: 11.5px; text-align: left; }
+/* Reads as prose, so it needs the usual link affordances to look clickable. */
+button.link.plain {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+  text-align: left;
+  color: #7ab7f5;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.link.plain:hover { color: #a5d0fa; }
 
 /* ---- save controls ---- */
 .field { display: flex; flex-direction: column; gap: 5px; }
@@ -233,6 +250,44 @@ select:hover { border-color: var(--accent); }
 .cat:has(input:not(:checked)) .cat-icon,
 .cat:has(input:not(:checked)) .dot { opacity: .35; }
 
+/* Per-category completion, mirroring the headline bar. Sits flush under the row
+   so the list reads as a set of small progress meters at a glance. */
+.cat-bar {
+  height: 2px;
+  margin: 0 4px 0 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+.cat-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--cat, var(--accent));
+  transition: width .3s ease;
+}
+#categories li:has(input:not(:checked)) .cat-bar i { opacity: .35; }
+
+/* Splits the auto-syncing categories from the manual ones. */
+.cat-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 5px;
+  font-size: 9.5px;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: .75;
+}
+.cat-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 /* Marks which categories can tick themselves from the save. Without this the
    manual-only ones look broken after a sync. */
 .sync-badge { flex: 0 0 auto; font-size: 10px; line-height: 1; color: var(--found); opacity: .8; cursor: help; }
@@ -269,8 +324,14 @@ select:hover { border-color: var(--accent); }
 .help dd { margin: 0; line-height: 1.45; }
 .help .key { font-size: 10px; }
 
-#sidebar footer { padding: 14px 16px; margin-top: auto; }
-#sidebar footer .note + .note { margin-top: 4px; }
+#sidebar footer { padding: 11px 16px; }
+.author {
+  color: var(--author, #D9711E);
+  text-decoration: underline;
+  text-decoration-color: #D9711E;
+  text-underline-offset: 2px;
+}
+.author:hover { filter: brightness(1.2); }
 /* ---- map ---- */
 #map { position: absolute; inset: 0; background: #0a0d13; }
 .leaflet-container { background: #0a0d13; }
