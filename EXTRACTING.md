@@ -59,13 +59,24 @@ This tells FModel what the data inside the game means. **I've already downloaded
 
 ## Step 5 — Export the world data
 
+> **Don't right-click the `MainWorld_5` folder unless you mean it.** Palworld's world is UE5 World
+> Partition, so that folder holds ~9,700 streaming-cell packages — exporting it takes about an hour
+> and writes tens of thousands of files. Almost everything useful lives in the single persistent
+> level asset, and the cells you actually need can be looked up from it afterwards.
+
 1. In the folder tree on the left, navigate to:
    ```
    Pal/Content/Pal/Maps/MainWorld_5
    ```
-2. **Right-click the `MainWorld_5` folder → Save Folder's Packages Properties (.json)**
+2. **Right-click the `PL_MainWorld5` asset inside it → Save Packages Properties (.json)**
 
-   This is the big one — it contains every object placed in the world. It may take a while.
+   That one file is the persistent level: every fast-travel point, tower and dungeon portal, plus
+   `SubObjectsToCellRemapping` — an index of which streaming cell each actor lives in. It exports
+   in seconds.
+
+3. Only if a marker category turns out to live in streaming cells, export **just those cells** by
+   name (`extract/build-markers.mjs` prints the ones it wants). Exporting the whole folder is
+   almost never the right move.
 
 3. Now navigate to:
    ```
