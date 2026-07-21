@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseSave } from '../src/palsave.mjs';
+import { parseSave } from '../app/lib/palsave.mjs';
 
 const DEFAULT_SAVE = path.join(
   process.env.LOCALAPPDATA,

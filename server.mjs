@@ -17,7 +17,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseSave } from './src/palsave.mjs';
+
+// Deliberately zero dependencies — Node's standard library only. The browser
+// already carries a copy of the Oodle decompressor for reading player saves, so
+// letting it decode LevelMeta.sav too means this server needs nothing installed.
+// That's what turns setup into "double-click the launcher" with no npm install.
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,6 +56,8 @@ function pickPlayer(worldDir) {
 }
 
 // SaveGames/<SteamID>/<WorldID>/{LevelMeta.sav, Players/*.sav}
+// Names are not resolved here — the page fetches /api/meta and decodes
+// LevelMeta.sav itself, which is what keeps this file dependency-free.
 function listWorlds() {
   if (!SAVES || !fs.existsSync(SAVES)) return [];
   const out = [];
@@ -61,35 +67,35 @@ function listWorlds() {
       if (!fs.existsSync(path.join(dir, 'LevelMeta.sav'))) continue;
       const player = pickPlayer(dir);
       if (!player) continue;
-
-      // LevelMeta is what turns "8247F1A5…" into a name a human recognises.
-      let name = world, host = '', level = null;
-      try {
-        const sd = parseSave(new Uint8Array(fs.readFileSync(path.join(dir, 'LevelMeta.sav')))).data?.SaveData || {};
-        name = sd.WorldName || world;
-        host = sd.HostPlayerName || '';
-        level = sd.HostPlayerLevel ?? null;
-      } catch { /* unreadable meta — still usable, just unnamed */ }
-
-      out.push({ id: `${account}/${world}`, name, host, level, player });
+      out.push({ id: `${account}/${world}`, folder: world, player });
     }
   }
   return out;
 }
 
-// Resolve a world id to its player save. The id shape is validated first (so it
-// cannot contain separators or ".."), then the resolved path is re-checked
-// against the save root — belt and braces against path traversal.
-function playerSavePath(worldId) {
+// The id shape is validated first (so it cannot contain separators or ".."),
+// then every resolved path is re-checked against the save root — belt and
+// braces against path traversal.
+function worldDir(worldId) {
   if (!SAVES || typeof worldId !== 'string') return null;
   if (!/^[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(worldId)) return null;
   const [account, world] = worldId.split('/');
-  const dir = path.join(SAVES, account, world);
+  const dir = path.resolve(SAVES, account, world);
+  return dir.startsWith(SAVES + path.sep) ? dir : null;
+}
+
+const inSaves = file => (file.startsWith(SAVES + path.sep) && fs.existsSync(file) ? file : null);
+
+function playerSavePath(worldId) {
+  const dir = worldDir(worldId);
+  if (!dir) return null;
   const player = pickPlayer(dir);
-  if (!player) return null;
-  const file = path.resolve(dir, 'Players', player);
-  if (!file.startsWith(SAVES + path.sep)) return null;
-  return fs.existsSync(file) ? file : null;
+  return player ? inSaves(path.resolve(dir, 'Players', player)) : null;
+}
+
+function metaSavePath(worldId) {
+  const dir = worldDir(worldId);
+  return dir ? inSaves(path.resolve(dir, 'LevelMeta.sav')) : null;
 }
 
 // --- hand-ticked progress ---------------------------------------------------
@@ -167,6 +173,15 @@ function handler(req, res) {
 
   // ---- read-only save API ----
   if (url === '/api/worlds') { sendJson(res, listWorlds()); return; }
+
+  // Raw LevelMeta.sav — the page decodes it to name the world.
+  if (url === '/api/meta') {
+    const file = metaSavePath(params.get('world'));
+    if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
+    res.end(fs.readFileSync(file));
+    return;
+  }
 
   if (url === '/api/status' || url === '/api/save') {
     const file = playerSavePath(params.get('world'));

@@ -1,7 +1,7 @@
 // PalMap — browser app
 // © Void Possum
 
-import { parseSave } from '../src/palsave.mjs';
+import { parseSave } from './lib/palsave.mjs';
 
 // --- world -> image transform ----------------------------------------------
 // The map's horizontal axis is world Y (east positive) and its vertical axis is
@@ -506,6 +506,20 @@ const currentWorld = () => worlds[Number(els.worldSelect.value)] || null;
 const worldLabel = w =>
   `${w.name}${w.host ? ` — ${w.host}` : ''}${w.level != null ? ` (Lv ${w.level})` : ''}`;
 
+// The server hands over LevelMeta.sav untouched and this decodes it, so the
+// server itself needs no save-parsing library — and therefore no npm install.
+// A world that won't decode still works; it just shows its folder id.
+async function nameWorld(w) {
+  try {
+    const res = await fetch(`/api/meta?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) throw new Error(res.status);
+    const sd = parseSave(new Uint8Array(await res.arrayBuffer())).data?.SaveData || {};
+    return { ...w, name: sd.WorldName || w.folder, host: sd.HostPlayerName || '', level: sd.HostPlayerLevel ?? null };
+  } catch {
+    return { ...w, name: w.folder, host: '', level: null };
+  }
+}
+
 // Footer stamp — shows at a glance which app.js ran and which path is live.
 const stamp = mode => {
   const el = document.getElementById('ver');
@@ -571,10 +585,10 @@ function setupAuto() {
 }
 
 fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
-  worlds = Array.isArray(list) ? list : [];
   // No saves found (or not running under the local server) — leave the manual
   // file picker as the primary control.
-  if (!worlds.length) { stamp('file mode'); return; }
+  if (!Array.isArray(list) || !list.length) { stamp('file mode'); return; }
+  worlds = await Promise.all(list.map(nameWorld));
 
   els.worldSelect.innerHTML = '';
   worlds.forEach((w, i) => {

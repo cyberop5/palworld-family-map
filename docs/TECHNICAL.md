@@ -1,7 +1,7 @@
 # PalMap — technical notes
 
 How it works, and the traps worth knowing if you change it. For using PalMap, see
-[README.md](README.md).
+[README.md](../README.md).
 
 ## Reading the save
 
@@ -63,9 +63,11 @@ the page polls it — works everywhere, no flags, no folder picking.
 
 | Endpoint | Returns |
 |---|---|
-| `/api/worlds` | every world, named from `LevelMeta.sav` |
+| `/api/worlds` | the world folders it found (ids only — no parsing) |
+| `/api/meta` | raw `LevelMeta.sav` bytes; the page decodes it for the world name |
 | `/api/status` | `{ mtime }` — a `stat`, cheap enough to poll every minute |
 | `/api/save` | the player save bytes, with an `X-Save-Mtime` header |
+| `/api/progress` | GET/POST hand-ticked markers — the only write path |
 
 Constrained deliberately: bound to **127.0.0.1 only**, read-only (no write path exists), and every
 requested path is validated against the save root so it can't be traversed out of. `PAL_SAVES`
@@ -74,7 +76,7 @@ overrides the save location, `PORT` the port (it walks 5173→5177 if busy).
 ## Coordinates
 
 The map's horizontal axis is world Y (east positive), vertical is world X inverted (north up).
-Bounds were fitted by `extract/calibrate.mjs` — 97.4% of known-on-land markers land on land pixels.
+Bounds were fitted by `tools/calibrate.mjs` — 97.4% of known-on-land markers land on land pixels.
 `diagnose-offset.mjs` then found a residual ~11px westward drift confined to the far-eastern edge
 (invisible on the mainland, obvious on small islands like Arena Entrance); `maxY` is tightened to
 null it there while keeping the rest within ~2px.
@@ -112,15 +114,15 @@ FModel walkthrough — note the World Partition trap documented there, exporting
 takes an hour and 23 GB.
 
 ```bash
-node extract/build-markers.mjs                       # FModel exports -> markers.json
-node extract/merge-bosses.mjs                        # spawners -> alpha pals + caged bosses
-node extract/merge-locations.mjs                     # watchtowers, treasure maps, warp points
-node extract/merge-cell.mjs itemPickup <cell.json>   # one World Partition cell at a time
-node extract/merge-notes.mjs                         # note locations
-node extract/assign-effigy-icons.mjs                 # attach Pal portraits to effigies
-node extract/copy-ui-icons.mjs                       # official compass icons
-node extract/merge-skillfruit.mjs                    # needs the 46 cells in work/skillfruit-cells.txt
-node extract/verify-join.mjs                         # score markers against a real save
+node tools/build-markers.mjs                       # FModel exports -> markers.json
+node tools/merge-bosses.mjs                        # spawners -> alpha pals + caged bosses
+node tools/merge-locations.mjs                     # watchtowers, treasure maps, warp points
+node tools/merge-cell.mjs itemPickup <cell.json>   # one World Partition cell at a time
+node tools/merge-notes.mjs                         # note locations
+node tools/assign-effigy-icons.mjs                 # attach Pal portraits to effigies
+node tools/copy-ui-icons.mjs                       # official compass icons
+node tools/merge-skillfruit.mjs                    # needs the 46 cells in work/skillfruit-cells.txt
+node tools/verify-join.mjs                         # score markers against a real save
 ```
 
 Everything after `build-markers.mjs` merges into an existing `markers.json`, so each can be re-run
@@ -142,14 +144,20 @@ on its own. `merge-locations.mjs` needs `--max-old-space-size=6144` (the persist
 ## Layout
 
 ```
-app/            static browser app (no build step)
-  app.js        map, sidebar, sync, import/export
-  data/         markers.json + T_WorldMap.png + icons  (committed)
-src/
-  palsave.mjs   .sav container -> GVAS bytes   (shared: browser + node)
-  gvas.mjs      GVAS property reader
-extract/        data pipeline + calibration
-server.mjs      static server + read-only save API
+Start PalMap.bat  the launcher a player double-clicks
+server.mjs        static server + save API — Node standard library only
+app/              static browser app (no build step)
+  app.js          map, sidebar, sync
+  lib/            palsave.mjs (.sav -> GVAS) + gvas.mjs, shared browser/node
+  vendor/         Leaflet and ooz-wasm, committed so nothing is installed
+  data/           markers.json + T_WorldMap.png + icons  (committed)
+docs/             this file, EXTRACTING.md, screenshot
+tools/            data pipeline + calibration (dev only)
 ```
+
+**Nothing needs installing to run PalMap.** `server.mjs` imports only `node:*` modules, and the
+browser gets Leaflet and the Oodle decompressor from `app/vendor/`. The one place a save-parsing
+library would have been needed server-side — naming worlds from `LevelMeta.sav` — is instead done
+in the page, which already carries the decompressor. `package.json` exists solely for `tools/`.
 
 © Void Possum

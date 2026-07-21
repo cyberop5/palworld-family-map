@@ -2,20 +2,15 @@
   "name": "palmap",
   "version": "1.2.0",
   "description": "Auto-tracking collectible map for Palworld — reads your save and ticks off what you've found",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.mjs"
   },
-  "keywords": [],
   "author": "Void Possum",
   "license": "GPL-3.0",
-  "type": "module",
-  "dependencies": {
-    "leaflet": "^1.9.4",
-    "ooz-wasm": "^2.0.0"
-  },
+  "//": "Running PalMap needs nothing installed — the server is standard-library only. These are used solely by the scripts in tools/, which regenerate map data from game files.",
   "devDependencies": {
+    "ooz-wasm": "^2.0.0",
     "pngjs": "^7.0.0"
   }
 }

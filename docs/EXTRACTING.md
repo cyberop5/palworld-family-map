@@ -75,7 +75,7 @@ This tells FModel what the data inside the game means. **I've already downloaded
    in seconds.
 
 3. Only if a marker category turns out to live in streaming cells, export **just those cells** by
-   name (`extract/build-markers.mjs` prints the ones it wants). Exporting the whole folder is
+   name (`tools/build-markers.mjs` prints the ones it wants). Exporting the whole folder is
    almost never the right move.
 
 3. Now navigate to:
