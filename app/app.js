@@ -302,24 +302,50 @@ const setStatus = (msg, cls = '') => { statusEl.textContent = msg; statusEl.clas
 // meaningful dashes and must be left alone.
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}$/;
 
-// The one join used by every path (file picker, folder picker, auto-sync).
+// Since 1.0 each effigy variant is its own relic type with its own perk
+// (Lamball = HungerReduction, Munchill = FoodDecayReduction, …) and is recorded
+// in RelicObtainForInstanceFlagByType. The flat RelicObtainForInstanceFlag only
+// ever holds the classic Lifmunk (CapturePower) ones, so both must be read or
+// every non-Lifmunk effigy stays unticked.
+const EXTRA_FLAGS = { effigy: ['RelicObtainForInstanceFlagByType'] };
+
+// RecordData entries come in two shapes: a flat [key, bool] list, or a per-type
+// list of { Type, Flags: [[key, bool], …] }. Collect keys from either.
+function recordKeys(entry) {
+  const out = [];
+  if (!Array.isArray(entry)) return out;
+  for (const item of entry) {
+    if (Array.isArray(item)) {
+      if (item[1] === true) out.push(item[0]);
+    } else if (item && Array.isArray(item.Flags)) {
+      for (const f of item.Flags) if (Array.isArray(f) && f[1] === true) out.push(f[0]);
+    }
+  }
+  return out;
+}
+
+// The one join used by every path (server sync, auto-sync, manual file picker).
 function syncFromBytes(bytes, label) {
   const save = parseSave(bytes);
   const record = save.data?.SaveData?.RecordData;
   if (!record) throw new Error('No RecordData — is this a player save (not Level.sav)?');
 
-  const flagSet = flag => new Set(
-    (record[flag] || []).filter(([, v]) => v === true).map(([k]) => {
-      const s = String(k).toLowerCase();
-      return GUID.test(s) ? s.replace(/-/g, '') : s;
-    })
-  );
+  const flagSet = names => {
+    const set = new Set();
+    for (const name of names) {
+      for (const k of recordKeys(record[name])) {
+        const s = String(k).toLowerCase();
+        set.add(GUID.test(s) ? s.replace(/-/g, '') : s);
+      }
+    }
+    return set;
+  };
 
   const next = new Set();
   let matched = 0;
   for (const cat of categories) {
     if (!cat.saveFlag) continue;
-    const flags = flagSet(cat.saveFlag);
+    const flags = flagSet([cat.saveFlag, ...(EXTRA_FLAGS[cat.id] || [])]);
     for (const m of byCategory.get(cat.id) || []) {
       if (flags.has(m.key)) { next.add(m.id); matched++; }
     }

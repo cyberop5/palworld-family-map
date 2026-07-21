@@ -30,9 +30,29 @@ const normalise = k => {
   return GUID.test(s) ? s.replace(/-/g, '') : s;
 };
 
-const flagSet = flag => new Set(
-  (record[flag] || []).filter(([, v]) => v === true).map(([k]) => normalise(k))
-);
+// Since 1.0 each effigy variant is its own relic type, recorded in
+// RelicObtainForInstanceFlagByType as { Type, Flags: [[key, bool], …] }. The
+// flat list only holds the classic Lifmunk ones, so both shapes must be read.
+const EXTRA_FLAGS = { effigy: ['RelicObtainForInstanceFlagByType'] };
+
+function recordKeys(entry) {
+  const out = [];
+  if (!Array.isArray(entry)) return out;
+  for (const item of entry) {
+    if (Array.isArray(item)) {
+      if (item[1] === true) out.push(item[0]);
+    } else if (item && Array.isArray(item.Flags)) {
+      for (const f of item.Flags) if (Array.isArray(f) && f[1] === true) out.push(f[0]);
+    }
+  }
+  return out;
+}
+
+const flagSet = names => {
+  const set = new Set();
+  for (const name of [].concat(names)) for (const k of recordKeys(record[name])) set.add(normalise(k));
+  return set;
+};
 
 console.log(`markers: ${markers.length}\n`);
 console.log('category      markers   save-flags   matched   orphaned');
@@ -49,7 +69,8 @@ for (const cat of categories) {
 
 for (const [flag, cats] of byFlag) {
   const keys = new Set(markers.filter(m => cats.some(c => c.id === m.category)).map(m => m.key));
-  const flags = flagSet(flag);
+  const extra = cats.flatMap(c => EXTRA_FLAGS[c.id] || []);
+  const flags = flagSet([flag, ...extra]);
   const matched = [...flags].filter(k => keys.has(k)).length;
   const orphaned = flags.size - matched;
   const warn = orphaned > 0 ? '  <-- unmatched save entries' : '';

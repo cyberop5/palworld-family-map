@@ -83,7 +83,7 @@ Markers join to save flags two ways:
 
 | Category | Save flag | Joins on |
 |---|---|---|
-| Lifmunk Effigy | `RelicObtainForInstanceFlag` | `LevelObjectInstanceId` (GUID) |
+| Effigy | `RelicObtainForInstanceFlag` **+** `RelicObtainForInstanceFlagByType` | `LevelObjectInstanceId` (GUID) |
 | Fast Travel | `FastTravelPointUnlockFlag` | `LevelObjectInstanceId` (GUID) |
 | Item Pickup | `ItemPickupObtainForInstanceFlag` | `LevelObjectInstanceId` (GUID) |
 | Tower Boss | `TowerBossDefeatFlag` | `BOSS_BATTLE_NAME_<BossType>` |
@@ -93,6 +93,24 @@ Markers join to save flags two ways:
 
 Alpha Pals and Caged Bosses share one save flag but are different things in game — a roaming
 Alpha versus one held in a syndicate camp — so they're separate categories with separate counters.
+
+**Effigies are recorded in two places, and both must be read.** The flat
+`RelicObtainForInstanceFlag` only ever holds the classic Lifmunk (`CapturePower`) relics. Since 1.0
+each effigy variant is its own relic type with its own perk, stored in
+`RelicObtainForInstanceFlagByType` as `{ Type, Flags: [[guid, bool], …] }`:
+
+| Relic type | Effigy |
+|---|---|
+| `CapturePower` | Lifmunk |
+| `HungerReduction` | Lamball |
+| `FoodDecayReduction` | Munchill |
+| `SwimSpeed` | Pengullet |
+| `ClimbSpeed` | Tanzee |
+| `SphereHoming` | Lunaris |
+| `ExpBonus` | Relaxaurus |
+
+Reading only the flat list silently under-counts — it found 23 of a test save's 45 effigies, and
+every non-Lifmunk one stayed unticked. `recordKeys()` in `app/app.js` handles both shapes.
 
 ## Regenerating the map data
 
@@ -170,7 +188,11 @@ Two smaller traps worth remembering if this code is touched again:
   `merge-bosses.mjs` + `assign-effigy-icons.mjs` fixes both.
 - **Field bosses match 20 of 27.** The remaining 7 are *human* bosses (`BOSS_Hunter_Rifle`,
   `BOSS_Male_Soldier`…) which aren't in the Pal spawner tables at all.
-- **Fast travel matches 50 of 57.** The other 7 are in World Partition cells that weren't exported.
+- **Fast travel matches 58 of 68.** The other 10 are in World Partition cells that weren't
+  exported, so they have no marker to tick.
+- **Hackable EXP towers and skill fruit trees aren't included yet.** Neither has a per-instance
+  save flag, so they can only ever be reference markers, and adding them needs a fresh
+  `PL_MainWorld5` export to locate their blueprints.
 - **Herbil / Munchill effigy portraits are inferred** by elimination from `LeafMomonga` /
   `IceCrocodile`. If they look swapped in game, swap them in `assign-effigy-icons.mjs`.
 - **Chests, eggs and skill fruit** aren't included. They're respawning spawners (~9,000 of them),
