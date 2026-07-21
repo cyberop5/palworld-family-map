@@ -31,7 +31,7 @@ const COLORS = {
   watchtower: '#2dd4bf',
   treasureMap: '#facc15',
   warpPoint: '#a78bfa',
-  respawnPoint: '#94a3b8',
+  skillFruit: '#f472b6',
 };
 
 // Official in-game compass icons, copied by extract/copy-ui-icons.mjs and
@@ -60,7 +60,7 @@ const PIN_SCALE = 1.25;
 const BASE_SIZE = {
   effigy: 26, alphaPal: 30, cagedBoss: 30, towerBoss: 30, dungeon: 19,
   fastTravel: 34, note: 20, itemPickup: 18,
-  watchtower: 32, treasureMap: 22, warpPoint: 24, respawnPoint: 18,
+  watchtower: 32, treasureMap: 22, warpPoint: 24, skillFruit: 22,
 };
 const sizeFor = category => Math.round((BASE_SIZE[category] || 22) * PIN_SCALE);
 
