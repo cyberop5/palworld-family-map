@@ -1,7 +1,7 @@
 node_modules/
 work/
 
-# Hand-ticked progress, written by the local server at runtime.
+# Manual progress, written by the local server at runtime.
 progress.json
 
 # FModel and its raw game-file exports — huge, and regenerable. The finished
