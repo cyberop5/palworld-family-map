@@ -13,8 +13,9 @@ const ICONS_SRC = 'Output/Exports/Pal/Content/Pal/Texture/PalIcon/Normal';
 const ICONS_OUT = 'app/data/icons';
 
 // display name -> internal codename used by the icon files.
-// The last two are inferred by elimination (Herbil=leaf, Munchill=chill); if they
-// ever look swapped in game, swap them here.
+// All confirmed against DT_PalNameText_Common (PAL_NAME_<codename> -> display),
+// including the three that were previously guesses: Herbil=LeafMomonga,
+// Munchill=IceCrocodile, and Yakumo=GuardianDog.
 const PAL_CODENAME = {
   Lifmunk: 'Carbunclo',
   Rooby: 'FlameBambi',
@@ -27,6 +28,7 @@ const PAL_CODENAME = {
   Munchill: 'IceCrocodile',
   Relaxaurus: 'LazyDragon',
   Lunaris: 'MoonChild',
+  Yakumo: 'GuardianDog',
 };
 
 const available = new Set(fs.readdirSync(ICONS_SRC));

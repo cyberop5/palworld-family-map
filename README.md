@@ -90,6 +90,16 @@ Markers join to save flags two ways:
 | Alpha Pal | `NormalBossDefeatFlag` | spawner name (`SpawnerType: FieldBoss`) |
 | Caged Boss | `NormalBossDefeatFlag` | spawner name (`SpawnerType: ImprisonmentBoss`) |
 | Note | `NoteObtainForInstanceFlag` | `NoteRowName` |
+| Watchtower | `FastTravelPointUnlockFlag` | `LevelObjectInstanceId` (GUID) |
+
+**Watchtowers are fast-travel points.** `BP_LevelObject_UnlockMapPoint_C` — the tower you activate
+to reveal a chunk of map — carries a `FastTravelPointID`, so the game records it under
+`FastTravelPointUnlockFlag` alongside ordinary fast-travel statues. Missing them was why a test
+save had 10 unlock flags with no marker to attach to; adding the category took fast travel from
+58/68 matched to **70/70, zero orphans**.
+
+Treasure Maps, Warp Points, Respawn Points and Dungeons have **no per-instance save flag**, so they
+are reference markers only — the sidebar marks them ✋ and they are ticked by hand.
 
 Alpha Pals and Caged Bosses share one save flag but are different things in game — a roaming
 Alpha versus one held in a syndicate camp — so they're separate categories with separate counters.
@@ -182,17 +192,17 @@ Two smaller traps worth remembering if this code is touched again:
 
 ## Known gaps
 
-- **Field boss names show internal codenames** ("Volcanic Monster" instead of "Blazamut"), and
-  four "Yakumo" effigies have no portrait, both for the same reason: no display-name table.
-  Exporting `Pal/Content/L10N/en/Pal/DataTable/Text/DT_PalNameText_Common` and re-running
-  `merge-bosses.mjs` + `assign-effigy-icons.mjs` fixes both.
+- **Field boss names show internal codenames** ("Volcanic Monster" instead of "Blazamut").
+  Re-running `merge-bosses.mjs` now that `DT_PalNameText_Common` is exported would fix it.
 - **Field bosses match 20 of 27.** The remaining 7 are *human* bosses (`BOSS_Hunter_Rifle`,
   `BOSS_Male_Soldier`…) which aren't in the Pal spawner tables at all.
-- **Fast travel matches 58 of 68.** The other 10 are in World Partition cells that weren't
-  exported, so they have no marker to tick.
-- **Hackable EXP towers and skill fruit trees aren't included yet.** Neither has a per-instance
-  save flag, so they can only ever be reference markers, and adding them needs a fresh
-  `PL_MainWorld5` export to locate their blueprints.
+- **Skill fruit, chests, eggs, resource nodes and fishing spots aren't included.** They live in
+  fine-grained World Partition cells — 46, 1427, 649, 849 and 457 cells respectively — so adding
+  them means exporting the whole `MainWorld_5` folder (~1 hour, ~23 GB). None of them has a save
+  flag either (they respawn), so they could only ever be reference markers. `work/type-cells.json`
+  from `merge-locations.mjs` lists exactly which cells hold what, if it's ever worth doing.
+- **Herbil / Munchill / Yakumo effigy portraits are now confirmed**, not inferred — checked
+  against `DT_PalNameText_Common` (`LeafMomonga`, `IceCrocodile`, `GuardianDog`).
 - **Herbil / Munchill effigy portraits are inferred** by elimination from `LeafMomonga` /
   `IceCrocodile`. If they look swapped in game, swap them in `assign-effigy-icons.mjs`.
 - **Chests, eggs and skill fruit** aren't included. They're respawning spawners (~9,000 of them),

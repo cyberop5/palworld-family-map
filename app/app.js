@@ -28,14 +28,23 @@ const COLORS = {
   dungeon: '#c084fc',
   note: '#fbbf24',
   itemPickup: '#22d3ee',
+  watchtower: '#2dd4bf',
+  treasureMap: '#facc15',
+  warpPoint: '#a78bfa',
+  respawnPoint: '#94a3b8',
 };
 
-// Official in-game compass icons, copied by extract/copy-ui-icons.mjs.
+// Official in-game compass icons, copied by extract/copy-ui-icons.mjs and
+// extract/merge-locations.mjs.
 const ICONS = {
   fastTravel: 'T_icon_compass_FTtower.png',
   dungeon: 'T_icon_compass_dungeon.png',
   towerBoss: 'T_icon_compass_tower.png',
   itemPickup: 'T_icon_compass_Search_Treasure.png',
+  watchtower: 'T_icon_compass_FTUnlockMap.png',
+  treasureMap: 'T_icon_compass_TreasureMap_01.png',
+  warpPoint: 'T_icon_compass_Teleport.png',
+  respawnPoint: 'T_icon_compass_Teleport_Direction.png',
 };
 
 // Notes have no counterpart in the game's UI textures, so they keep a drawn glyph.
@@ -48,7 +57,11 @@ const PIN_SCALE = 1.25;
 // canvas very differently: the fast-travel emblem is a wide, short shape that
 // only occupies ~50% of its height, so it needs a bigger box to read at the same
 // visual weight; dungeon/chest glyphs are near-solid and go smaller.
-const BASE_SIZE = { effigy: 26, alphaPal: 30, cagedBoss: 30, towerBoss: 30, dungeon: 19, fastTravel: 34, note: 20, itemPickup: 18 };
+const BASE_SIZE = {
+  effigy: 26, alphaPal: 30, cagedBoss: 30, towerBoss: 30, dungeon: 19,
+  fastTravel: 34, note: 20, itemPickup: 18,
+  watchtower: 32, treasureMap: 22, warpPoint: 24, respawnPoint: 18,
+};
 const sizeFor = category => Math.round((BASE_SIZE[category] || 22) * PIN_SCALE);
 
 // --- state ------------------------------------------------------------------
@@ -232,6 +245,10 @@ applyZoomScale();
 const listEl = document.getElementById('categories');
 
 function updateCounts() {
+  // Only trackable categories belong in the headline total — counting chests and
+  // warp points would make the overall figure meaningless.
+  let totalFound = 0, totalTracked = 0;
+
   for (const cat of categories) {
     const mine = byCategory.get(cat.id);
     if (!mine?.length) continue;
@@ -241,6 +258,15 @@ function updateCounts() {
       el.textContent = `${found} / ${mine.length}`;
       el.classList.toggle('done', found === mine.length);
     }
+    if (cat.saveFlag) { totalFound += found; totalTracked += mine.length; }
+  }
+
+  const bar = document.getElementById('progress-bar');
+  const label = document.getElementById('progress-label');
+  if (bar && label && totalTracked) {
+    const pct = Math.round((totalFound / totalTracked) * 100);
+    bar.style.width = `${pct}%`;
+    label.textContent = `${totalFound} / ${totalTracked} tracked collectibles · ${pct}%`;
   }
 }
 
@@ -255,6 +281,12 @@ for (const cat of categories) {
   const mine = byCategory.get(cat.id);
   if (!mine?.length) continue;
 
+  // Only categories with a save flag can tick themselves; the rest are manual.
+  // Saying so inline stops "why didn't my chests update?" before it starts.
+  const badge = cat.saveFlag
+    ? `<span class="sync-badge" title="Supports auto-sync — these tick themselves from your save file">⟳</span>`
+    : `<span class="sync-badge manual" title="Manual only — Palworld doesn't record these in the save, so tick them by hand">✋</span>`;
+
   const li = document.createElement('li');
   li.innerHTML = `
     <div class="cat">
@@ -262,6 +294,7 @@ for (const cat of categories) {
         <input type="checkbox" data-cat="${cat.id}" ${hiddenCats.has(cat.id) ? '' : 'checked'}>
         <span class="dot" style="background:${COLORS[cat.id] || '#94a3b8'}"></span>
         <span class="name">${escapeHtml(cat.name)}</span>
+        ${badge}
         <span class="count" data-count="${cat.id}"></span>
       </label>
       <button class="found-btn" data-found="${cat.id}"></button>

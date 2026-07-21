@@ -48,10 +48,25 @@ html, body {
   overflow-y: auto;
 }
 
-#sidebar header { padding: 16px; border-bottom: 1px solid var(--line); }
-#sidebar h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+/* Keep the title visible while the category list scrolls. */
+#sidebar header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(20, 24, 33, .92);
+}
+#sidebar h1 { margin: 0; font-size: 19px; letter-spacing: .5px; }
 #sidebar h1::first-letter { color: var(--accent); }
 .sub { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+
+/* A default scrollbar over a translucent panel looks like a seam. */
+#sidebar { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#sidebar::-webkit-scrollbar { width: 8px; }
+#sidebar::-webkit-scrollbar-track { background: transparent; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+#sidebar::-webkit-scrollbar-thumb:hover { background: #3a4356; }
 
 .panel { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .row { display: flex; gap: 8px; }
@@ -101,9 +116,38 @@ select:hover { border-color: var(--accent); }
 .auto-row input { accent-color: var(--accent); cursor: pointer; }
 .auto-row select { width: auto; flex: 0 0 auto; padding: 4px 6px; }
 
+/* ---- overall progress ---- */
+.progress { margin-bottom: 12px; }
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--found));
+  transition: width .3s ease;
+}
+.progress-label { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+
 /* ---- category list ---- */
 #categories { list-style: none; margin: 12px 0 0; padding: 0; }
 #categories li { margin-bottom: 2px; }
+
+/* Marks which categories can tick themselves from the save. Without this the
+   manual-only ones look broken after a sync. */
+.sync-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--found);
+  opacity: .85;
+  cursor: help;
+}
+.sync-badge.manual { color: var(--muted); opacity: .6; }
 
 .cat {
   display: flex;

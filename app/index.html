@@ -46,11 +46,20 @@
   </div>
 
   <div class="panel">
+    <div class="progress">
+      <div class="progress-track"><div class="progress-fill" id="progress-bar"></div></div>
+      <p class="progress-label" id="progress-label"></p>
+    </div>
+
     <div class="row">
       <button id="all-btn">All</button>
       <button id="none-btn">None</button>
     </div>
     <ul id="categories"></ul>
+    <p class="note">
+      <span class="sync-badge">⟳</span> ticks itself from your save ·
+      <span class="sync-badge manual">✋</span> tick by hand
+    </p>
     <p class="note">
       The ● button sets what each category does with markers you've already found:
       shown, ◐ dimmed, or ○ hidden. Shift-click to set them all.
