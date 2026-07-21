@@ -1,7 +1,7 @@
 {
   "name": "palmap",
-  "version": "0.1.0",
-  "description": "Local Palworld progress map — track effigies, bosses and collectibles from your own save",
+  "version": "1.2.0",
+  "description": "Auto-tracking collectible map for Palworld — reads your save and ticks off what you've found",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
