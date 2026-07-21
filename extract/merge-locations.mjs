@@ -76,16 +76,10 @@ const CATEGORIES = [
     key: (a, i) => instanceId(a) || `warp${i}`,
     label: a => (a.Type === 'BP_DimensionWarpPoint_C' ? 'Dimensional Warp' : 'Warp Point'),
   },
-  {
-    id: 'respawnPoint',
-    name: 'Respawn Point',
-    saveFlag: null,
-    icon: 'T_icon_compass_Teleport_Direction.png',
-    match: t => t === 'BP_LevelObject_StaticRespawnPoint_C',
-    key: (a, i) => instanceId(a) || `respawn${i}`,
-    label: () => 'Respawn Point',
-  },
 ];
+
+// Deliberately not extracted: BP_LevelObject_StaticRespawnPoint_C. Respawn
+// points aren't collectibles and add noise to a map about tracking progress.
 
 console.log('reading persistent level (this takes a moment)...');
 const level = readJson(LEVEL);

@@ -39,66 +39,102 @@ html, body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 300px;
+  width: 296px;
   z-index: 1000;
-  background: rgba(24, 28, 38, .84);
+  background: rgba(20, 24, 33, .88);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
-
-/* Keep the title visible while the category list scrolls. */
-#sidebar header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(20, 24, 33, .92);
-}
-#sidebar h1 { margin: 0; font-size: 19px; letter-spacing: .5px; }
-#sidebar h1::first-letter { color: var(--accent); }
-.sub { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-
-/* A default scrollbar over a translucent panel looks like a seam. */
-#sidebar { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 #sidebar::-webkit-scrollbar { width: 8px; }
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
 #sidebar::-webkit-scrollbar-thumb:hover { background: #3a4356; }
 
+/* Keep the identity visible while the category list scrolls. */
+#sidebar header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 14px 16px 12px;
+  background: rgba(20, 24, 33, .95);
+  border-bottom: 1px solid var(--line);
+}
+#sidebar h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: .3px; }
+#sidebar h1::first-letter { color: var(--accent); }
+.tagline { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+
+/* One rhythm for every block: same padding, hairline separators, no nesting. */
 .panel { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.panel > * + * { margin-top: 10px; }
 .row { display: flex; gap: 8px; }
 
+/* ---- section headings ---- */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; }
+.section-head h2 {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.head-actions { display: flex; align-items: center; gap: 5px; }
+.head-actions .sep { color: var(--line); font-size: 11px; }
+
+/* ---- buttons ----
+   Three weights only: primary (one per screen), ghost (neutral), link (tertiary).
+   Everything used to be the same weight, which is what made it read as noise. */
 button {
-  flex: 1;
-  padding: 8px 10px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
+  font: inherit;
+  font-size: 13px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
 }
-button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
-button.primary:hover { filter: brightness(1.1); }
+button.primary {
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--accent);
+  color: #1a1205;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.primary:hover { filter: brightness(1.08); }
 
-.status { margin: 8px 0 0; font-size: 12px; color: var(--muted); min-height: 1em; }
-.status.ok { color: var(--found); }
-.status.err { color: #f87171; }
-.note { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
-.note code { background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+button.ghost {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+button.ghost:hover { border-color: var(--accent); }
 
-/* save-folder controls */
-.panel > button + button,
-.panel > .field,
-.panel > .row,
-.panel > .auto-row { margin-top: 8px; }
+button.link {
+  padding: 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+button.link:hover { color: var(--accent); }
+/* Sentence-case variant for links that are prose rather than a control label. */
+button.link.plain { text-transform: none; letter-spacing: 0; font-size: 11.5px; text-align: left; }
 
-.field { display: flex; flex-direction: column; gap: 4px; }
-.field-label { font-size: 11px; color: var(--muted); }
+/* ---- save controls ---- */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label {
+  font-size: 10.5px;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 select {
   width: 100%;
@@ -107,23 +143,34 @@ select {
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
+  font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 select:hover { border-color: var(--accent); }
 
-.auto-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.auto-row input { accent-color: var(--accent); cursor: pointer; }
-.auto-row select { width: auto; flex: 0 0 auto; padding: 4px 6px; }
+/* Refresh and the auto toggle are one control group, not two stacked blocks. */
+.save-bar { display: flex; align-items: center; gap: 8px; }
+.auto-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.auto-row input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.auto-row select { width: auto; padding: 3px 4px; font-size: 11.5px; }
+
+.status { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.status.ok { color: var(--found); }
+.status.err { color: #f87171; }
+.note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.45; }
 
 /* ---- overall progress ---- */
-.progress { margin-bottom: 12px; }
-.progress-track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--panel-2);
-  overflow: hidden;
-}
+.panel-progress { padding-top: 12px; padding-bottom: 12px; }
+.progress-track { height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
 .progress-fill {
   height: 100%;
   width: 0;
@@ -131,70 +178,99 @@ select:hover { border-color: var(--accent); }
   background: linear-gradient(90deg, var(--accent), var(--found));
   transition: width .3s ease;
 }
-.progress-label { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+.progress-label { margin: 7px 0 0; font-size: 11px; color: var(--muted); }
 
 /* ---- category list ---- */
-#categories { list-style: none; margin: 12px 0 0; padding: 0; }
-#categories li { margin-bottom: 2px; }
-
-/* Marks which categories can tick themselves from the save. Without this the
-   manual-only ones look broken after a sync. */
-.sync-badge {
-  flex: 0 0 auto;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--found);
-  opacity: .85;
-  cursor: help;
-}
-.sync-badge.manual { color: var(--muted); opacity: .6; }
+#categories { list-style: none; margin: 0; padding: 0; }
+#categories li + li { margin-top: 1px; }
 
 .cat {
   display: flex;
   align-items: center;
-  gap: 4px;
   border-radius: 6px;
   user-select: none;
 }
-.cat:hover { background: var(--panel-2); }
+.cat:hover { background: rgba(255, 255, 255, .04); }
 .cat-main {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 4px 6px 8px;
+  gap: 8px;
+  padding: 6px 4px 6px 7px;
   cursor: pointer;
   min-width: 0;
 }
-.cat input { accent-color: var(--accent); cursor: pointer; }
-.cat .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; }
-.cat .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cat .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cat input { accent-color: var(--accent); cursor: pointer; margin: 0; flex: 0 0 auto; }
+
+/* Swatch column is a fixed width so every name starts on the same x. */
+.cat .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 18px; margin-left: 4px; }
+.cat .cat-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  object-fit: contain;
+  min-width: 0;
+}
+.cat .name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cat .count {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
 .cat .count.done { color: var(--found); }
+
+/* Unchecked categories recede rather than disappear. */
+.cat:has(input:not(:checked)) .name,
+.cat:has(input:not(:checked)) .count { opacity: .45; }
+.cat:has(input:not(:checked)) .cat-icon,
+.cat:has(input:not(:checked)) .dot { opacity: .35; }
+
+/* Marks which categories can tick themselves from the save. Without this the
+   manual-only ones look broken after a sync. */
+.sync-badge { flex: 0 0 auto; font-size: 10px; line-height: 1; color: var(--found); opacity: .8; cursor: help; }
+.sync-badge.manual { color: var(--muted); opacity: .55; }
 
 /* per-category treatment of markers you've already found */
 .found-btn {
   flex: 0 0 auto;
-  width: 26px;
+  width: 24px;
   padding: 4px 0;
-  margin-right: 4px;
-  font-size: 13px;
+  margin-right: 3px;
+  font-size: 12px;
   line-height: 1;
   border-radius: 5px;
-  background: transparent;
-  border: 1px solid transparent;
   color: var(--muted);
-  cursor: pointer;
 }
-.found-btn:hover { background: var(--panel); border-color: var(--line); color: var(--text); }
+.found-btn:hover { background: var(--panel-2); color: var(--text); }
 .found-btn[data-state="shown"] { color: var(--found); }
 .found-btn[data-state="hidden"] { color: #f87171; }
 
-.check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
-.check input { accent-color: var(--accent); }
+/* ---- collapsible help ---- */
+.help { font-size: 11px; color: var(--muted); }
+.help summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  padding: 3px 0;
+}
+.help summary::-webkit-details-marker { display: none; }
+.help summary::before { content: '？ '; opacity: .7; }
+.help summary:hover { color: var(--accent); }
+.help dl { margin: 6px 0 0; display: grid; grid-template-columns: 20px 1fr; gap: 5px 6px; }
+.help dt { text-align: center; }
+.help dd { margin: 0; line-height: 1.45; }
+.help .key { font-size: 10px; }
 
 #sidebar footer { padding: 14px 16px; margin-top: auto; }
-
+#sidebar footer .note + .note { margin-top: 4px; }
 /* ---- map ---- */
 #map { position: absolute; inset: 0; background: #0a0d13; }
 .leaflet-container { background: #0a0d13; }

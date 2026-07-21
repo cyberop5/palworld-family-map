@@ -1,9 +1,16 @@
-# PalMap
+# PalMap — auto-tracking collectible map for Palworld
 
-A local Palworld progress map. Tracks Lifmunk Effigies, bosses, dungeons and fast travel
-points, and reads your save file to tick off what you've already found.
+**A companion map that ticks itself off.** PalMap reads your Palworld save and marks what you've
+already collected — effigies, bosses, fast-travel points, watchtowers, notes and item pickups —
+then keeps up with you while you play.
 
-Runs entirely in your browser. No account, no upload, no subscription.
+Runs locally. No account, no upload, no subscription.
+
+It's a **completion tracker, not an encyclopaedia.** It deliberately covers the things you
+*finish* — the ~760 collectibles the game records in your save — rather than the thousands of
+respawning chests, eggs, ore nodes and fishing spots that can never be completed and would bury
+the island in pins. Every category is labelled in the sidebar with whether it auto-syncs (⟳) or is
+ticked by hand (✋), so nothing looks broken.
 
 ## Running it
 

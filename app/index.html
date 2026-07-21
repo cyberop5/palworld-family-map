@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PalMap — Palworld progress tracker</title>
+<title>PalMap — auto-tracking collectible map for Palworld</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="style.css?v=1.1">
+<link rel="stylesheet" href="style.css?v=1.2">
 <script src="vendor/leaflet.js"></script>
 <script type="importmap">
 { "imports": { "ooz-wasm": "./vendor/ooz-wasm/index.js" } }
@@ -16,73 +16,85 @@
 <aside id="sidebar">
   <header>
     <h1>PalMap</h1>
-    <p class="sub">Palpagos Island</p>
+    <p class="tagline">Auto-tracking collectible map for Palworld</p>
   </header>
 
-  <div class="panel">
+  <!-- Save. One primary action until a save is found, then it steps back. -->
+  <section class="panel">
     <label class="field" id="world-field" hidden>
-      <span class="field-label">World</span>
+      <span class="field-label">Save</span>
       <select id="world-select"></select>
     </label>
 
-    <div class="row" id="sync-actions" hidden>
-      <button id="refresh-btn">Refresh now</button>
+    <div class="save-bar" id="sync-actions" hidden>
+      <button id="refresh-btn" class="ghost" title="Re-read the save file now">↻ Refresh</button>
+      <label class="auto-row" id="auto-row" hidden title="Re-reads the save on a timer and updates automatically">
+        <input type="checkbox" id="auto-toggle" checked>
+        <span>Auto</span>
+        <select id="auto-interval" aria-label="Auto-sync interval">
+          <option value="1" selected>1m</option>
+          <option value="2">2m</option>
+          <option value="5">5m</option>
+          <option value="10">10m</option>
+        </select>
+      </label>
     </div>
-
-    <label class="check auto-row" id="auto-row" hidden>
-      <input type="checkbox" id="auto-toggle" checked>
-      <span>Auto-sync every</span>
-      <select id="auto-interval">
-        <option value="1" selected>1 min</option>
-        <option value="2">2 min</option>
-        <option value="5">5 min</option>
-        <option value="10">10 min</option>
-      </select>
-    </label>
 
     <button id="sync-btn" class="primary">Sync from save file</button>
     <input type="file" id="sync-input" accept=".sav" hidden>
     <p id="sync-status" class="status"></p>
-  </div>
+  </section>
 
-  <div class="panel">
-    <div class="progress">
-      <div class="progress-track"><div class="progress-fill" id="progress-bar"></div></div>
-      <p class="progress-label" id="progress-label"></p>
+  <!-- Progress. The emotional core, so it gets its own space. -->
+  <section class="panel panel-progress">
+    <div class="progress-track"><div class="progress-fill" id="progress-bar"></div></div>
+    <p class="progress-label" id="progress-label"></p>
+  </section>
+
+  <section class="panel panel-cats">
+    <div class="section-head">
+      <h2>Categories</h2>
+      <div class="head-actions">
+        <button id="all-btn" class="link">All</button>
+        <span class="sep">/</span>
+        <button id="none-btn" class="link">None</button>
+      </div>
     </div>
 
-    <div class="row">
-      <button id="all-btn">All</button>
-      <button id="none-btn">None</button>
-    </div>
     <ul id="categories"></ul>
-    <p class="note">
-      <span class="sync-badge">⟳</span> ticks itself from your save ·
-      <span class="sync-badge manual">✋</span> tick by hand
-    </p>
-    <p class="note">
-      The ● button sets what each category does with markers you've already found:
-      shown, ◐ dimmed, or ○ hidden. Shift-click to set them all.
-    </p>
-  </div>
 
-  <div class="panel">
+    <!-- Progressive disclosure: the explanations were three permanent
+         paragraphs of small print. Now they're one line you can open. -->
+    <details class="help">
+      <summary>What do the symbols mean?</summary>
+      <dl>
+        <dt><span class="sync-badge">⟳</span></dt>
+        <dd>Ticks itself from your save file.</dd>
+        <dt><span class="sync-badge manual">✋</span></dt>
+        <dd>Palworld doesn't record these — click a marker to tick it by hand.</dd>
+        <dt><span class="key">●</span></dt>
+        <dd>Sets what a category does with markers you've found: ● shown,
+            ◐ dimmed, ○ hidden. Shift-click sets every category at once.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <section class="panel">
     <div class="row">
-      <button id="export-btn">Export progress</button>
-      <button id="import-btn">Import</button>
+      <button id="export-btn" class="ghost">Export progress</button>
+      <button id="import-btn" class="ghost">Import</button>
       <input type="file" id="import-input" accept=".json" hidden>
     </div>
-    <p class="note">Progress is saved in this browser. Export to keep a backup.</p>
-  </div>
+  </section>
 
   <footer>
     <p class="note">Reads your save read-only. Nothing is uploaded.</p>
-    <p class="note" id="ver">© Void Possum · v1.1</p>
+    <p class="note" id="ver">© Void Possum · v1.2</p>
   </footer>
 </aside>
 
 <div id="map"></div>
 
-<script type="module" src="app.js?v=1.1"></script>
+<script type="module" src="app.js?v=1.2"></script>
 </body>
 </html>

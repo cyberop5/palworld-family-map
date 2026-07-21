@@ -282,17 +282,25 @@ for (const cat of categories) {
   if (!mine?.length) continue;
 
   // Only categories with a save flag can tick themselves; the rest are manual.
-  // Saying so inline stops "why didn't my chests update?" before it starts.
+  // Saying so inline stops "why didn't my treasure maps update?" before it starts.
   const badge = cat.saveFlag
     ? `<span class="sync-badge" title="Supports auto-sync — these tick themselves from your save file">⟳</span>`
     : `<span class="sync-badge manual" title="Manual only — Palworld doesn't record these in the save, so tick them by hand">✋</span>`;
 
+  // Show the category's real map icon where it has one. Categories whose
+  // markers are per-Pal portraits (effigies, bosses) have no single icon, so
+  // they keep a colour swatch that matches their pins.
+  const colour = COLORS[cat.id] || '#94a3b8';
+  const swatch = ICONS[cat.id]
+    ? `<img class="cat-icon" src="data/icons/ui/${ICONS[cat.id]}" alt="" decoding="async">`
+    : `<span class="dot" style="background:${colour}"></span>`;
+
   const li = document.createElement('li');
   li.innerHTML = `
-    <div class="cat">
+    <div class="cat" style="--cat:${colour}">
       <label class="cat-main">
         <input type="checkbox" data-cat="${cat.id}" ${hiddenCats.has(cat.id) ? '' : 'checked'}>
-        <span class="dot" style="background:${COLORS[cat.id] || '#94a3b8'}"></span>
+        ${swatch}
         <span class="name">${escapeHtml(cat.name)}</span>
         ${badge}
         <span class="count" data-count="${cat.id}"></span>
@@ -445,7 +453,7 @@ const worldLabel = w =>
 // Footer stamp — shows at a glance which app.js ran and which path is live.
 const stamp = mode => {
   const el = document.getElementById('ver');
-  if (el) el.textContent = `© Void Possum · v1.1 · ${mode}`;
+  if (el) el.textContent = `© Void Possum · v1.2 · ${mode}`;
 };
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
@@ -519,8 +527,10 @@ fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
   els.worldField.hidden = false;
   els.syncActions.hidden = false;
   els.autoRow.hidden = false;
+  // The server found the save, so the manual picker drops to a tertiary link.
   els.syncBtn.classList.remove('primary');
-  els.syncBtn.textContent = 'Or pick a .sav manually…';
+  els.syncBtn.classList.add('link', 'plain');
+  els.syncBtn.textContent = 'Or pick a .sav file manually…';
   stamp('auto-sync');
 
   els.autoToggle.checked = (localStorage.getItem(LS_AUTO_ON) ?? '1') === '1';
