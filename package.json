@@ -1,0 +1,21 @@
+{
+  "name": "palmap",
+  "version": "0.1.0",
+  "description": "Local Palworld progress map — track effigies, bosses and collectibles from your own save",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.mjs"
+  },
+  "keywords": [],
+  "author": "Void Possum",
+  "license": "GPL-3.0",
+  "type": "module",
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "ooz-wasm": "^2.0.0"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+work/
+
+# FModel and its raw game-file exports — huge, and regenerable. The finished
+# assets under app/data/ (map, markers, icons) ARE committed; see README.
+/FModel.exe
+Output/
+extract/fmodel-export/
