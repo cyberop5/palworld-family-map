@@ -82,7 +82,7 @@ Yes — send them the download link above, or just copy the whole folder to them
 Around 760 collectibles that you can actually *finish*:
 
 Effigies · Alpha Pals · Caged Bosses · Tower Bosses · Fast Travel · Watchtowers · Notes ·
-Items · Dungeons · Treasure Maps · Warp Points
+Items · Dungeons · Treasure Maps · Warp Points · Skill Fruit Trees
 
 It leaves out chests, eggs, ore and fishing spots on purpose. Those respawn forever, so they can
 never be completed — and there are thousands of them, which would bury the island in icons.

@@ -1,6 +1,6 @@
 {
   "name": "palmap",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "description": "Auto-tracking collectible map for Palworld — reads your save and ticks off what you've found",
   "type": "module",
   "scripts": {

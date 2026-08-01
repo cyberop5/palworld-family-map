@@ -45,6 +45,7 @@ const ICONS = {
   treasureMap: 'T_icon_compass_TreasureMap_01.png',
   warpPoint: 'T_icon_compass_Teleport.png',
   respawnPoint: 'T_icon_compass_Teleport_Direction.png',
+  skillFruit: 'Skill_Fruit_icon.webp',
 };
 
 // Notes have no counterpart in the game's UI textures, so they keep a drawn glyph.
@@ -177,7 +178,7 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': 
 // there's no single pin image to reuse. Effigies borrow Lifmunk — the classic
 // one — and the bosses use the game's own compass crests.
 const CAT_ICON = {
-  effigy: 'icons/T_Carbunclo_icon_normal.png',
+  effigy: 'icons/effigy/Lifmunk_Effigy_icon.webp',
   alphaPal: 'icons/ui/T_icon_compass_boss.png',
   cagedBoss: 'icons/ui/T_icon_compass_KeyBoss.png',
 };
@@ -196,8 +197,14 @@ function pinFor(m) {
   const size = sizeFor(m.category);
   let html;
 
-  if (m.icon) {
-    // Effigies and bosses show the Pal's portrait, ringed in their category colour.
+  if (m.category === 'effigy' && m.icon) {
+    // Effigy icons are their own transparent art, so they show bare — no disc,
+    // no ring — unlike the square Pal portraits below which need a circular frame.
+    html = `<div class="effigy-pin" style="width:${size}px;height:${size}px">
+              <img src="data/icons/${m.icon}" alt="" decoding="async"></div>`;
+  } else if (m.icon) {
+    // Bosses show the Pal's square portrait, cropped to a disc and ringed in
+    // their category colour.
     html = `<div class="pal-pin${m.caged ? ' caged' : ''}" style="--ring:${color};width:${size}px;height:${size}px">
               <img src="data/icons/${m.icon}" alt="" decoding="async"></div>`;
   } else if (ICONS[m.category]) {
@@ -525,7 +532,7 @@ const stamp = mode => {
   const el = document.getElementById('ver');
   if (el) el.innerHTML =
     `<a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>`
-    + ` · v1.2 · ${escapeHtml(mode)}`;
+    + ` · v1.2.5 · ${escapeHtml(mode)}`;
 };
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
@@ -622,6 +629,93 @@ fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
   setupAuto();
 }).catch(err => { console.error(err); stamp('file mode'); });
 
+
+// --- search -----------------------------------------------------------------
+// Type a name and jump to it. Matches any marker's label (boss/Pal names,
+// effigies, fast-travel points…); picking one reveals it and flies the map over.
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+
+// Pre-split each label into a lowercase haystack once, so keystrokes are cheap.
+const searchIndex = markers.map(m => ({ m, hay: m.label.toLowerCase() }));
+const catName = id => (categories.find(c => c.id === id) || {}).name || id;
+
+let searchSel = -1;   // highlighted result for keyboard nav
+
+function renderSearch(q) {
+  const query = q.trim().toLowerCase();
+  if (!query) { closeSearch(); return; }
+
+  const hits = [];
+  for (const e of searchIndex) {
+    if (e.hay.includes(query)) hits.push(e.m);
+    if (hits.length >= 12) break;
+  }
+
+  if (!hits.length) {
+    searchResults.innerHTML = '<li class="search-empty">No matches</li>';
+    searchResults.hidden = false;
+    searchSel = -1;
+    return;
+  }
+
+  searchResults.innerHTML = hits.map((m, i) => `
+    <li class="search-hit" data-id="${m.id}" data-i="${i}" role="option">
+      <span class="dot" style="background:${COLORS[m.category] || '#94a3b8'}"></span>
+      <span class="hit-label">${escapeHtml(m.label)}</span>
+      <span class="hit-cat">${escapeHtml(catName(m.category))}</span>
+    </li>`).join('');
+  searchResults.hidden = false;
+  searchSel = -1;
+
+  searchResults.querySelectorAll('.search-hit').forEach(li =>
+    li.addEventListener('click', () => goToMarker(li.dataset.id)));
+}
+
+function closeSearch() {
+  searchResults.hidden = true;
+  searchResults.innerHTML = '';
+  searchSel = -1;
+}
+
+function goToMarker(id) {
+  const m = markers.find(x => x.id === id);
+  const pin = pins.get(id);
+  if (!m || !pin) return;
+
+  // The user searched for it, so make sure it's actually on the map even if its
+  // category is toggled off or its "found" markers are hidden.
+  const layer = layers.get(m.category);
+  if (layer && !layer.hasLayer(pin)) layer.addLayer(pin);
+
+  map.setView(pin.getLatLng(), Math.max(map.getZoom(), 0));
+  openPopup(m, pin);
+  closeSearch();
+  searchInput.blur();
+}
+
+searchInput.addEventListener('input', () => renderSearch(searchInput.value));
+searchInput.addEventListener('focus', () => { if (searchInput.value) renderSearch(searchInput.value); });
+
+searchInput.addEventListener('keydown', e => {
+  const hits = [...searchResults.querySelectorAll('.search-hit')];
+  if (e.key === 'Escape') { closeSearch(); searchInput.blur(); return; }
+  if (!hits.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchSel = (searchSel + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+    hits.forEach((li, i) => li.classList.toggle('sel', i === searchSel));
+    hits[searchSel].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    (hits[searchSel] || hits[0]).click();
+  }
+});
+
+// Click outside the search box closes the dropdown.
+document.addEventListener('click', e => {
+  if (!document.getElementById('search').contains(e.target)) closeSearch();
+});
 
 const profile = localStorage.getItem(LS.profile);
 if (profile) setStatus(`Last synced from ${profile}`);

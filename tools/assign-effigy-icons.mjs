@@ -1,50 +1,22 @@
-// Give each effigy the portrait of the Pal it depicts.
+// Give each effigy the icon of the effigy it is.
 //
-// markers.json stores effigies by display name (the L10N table was available when
-// they were built), but the icon files are named with the game's internal
-// codenames. This table bridges the two.
+// Effigy markers are stored by display name (Lamball Effigy, Munchill Effigy…),
+// and app/data/icons/effigy/ holds a matching <Name>_Effigy_icon.webp for each.
+// This points every effigy marker at its icon. Self-contained — it needs only
+// the committed icons, no game-file export.
 //
 // © Void Possum
 
 import fs from 'node:fs';
-import path from 'node:path';
 
-const ICONS_SRC = 'Output/Exports/Pal/Content/Pal/Texture/PalIcon/Normal';
-const ICONS_OUT = 'app/data/icons';
+const EFFIGY_DIR = 'app/data/icons/effigy';
+const path = 'app/data/markers.json';
 
-// display name -> internal codename used by the icon files.
-// All confirmed against DT_PalNameText_Common (PAL_NAME_<codename> -> display),
-// including the three that were previously guesses: Herbil=LeafMomonga,
-// Munchill=IceCrocodile, and Yakumo=GuardianDog.
-const PAL_CODENAME = {
-  Lifmunk: 'Carbunclo',
-  Rooby: 'FlameBambi',
-  Cattiva: 'PinkCat',
-  Lamball: 'SheepBall',
-  Pengullet: 'Penguin',
-  Depresso: 'NegativeKoala',
-  Tanzee: 'Monkey',
-  Herbil: 'LeafMomonga',
-  Munchill: 'IceCrocodile',
-  Relaxaurus: 'LazyDragon',
-  Lunaris: 'MoonChild',
-  Yakumo: 'GuardianDog',
-};
+const have = new Set(fs.readdirSync(EFFIGY_DIR));
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
 
-const available = new Set(fs.readdirSync(ICONS_SRC));
-const iconFor = display => {
-  const code = PAL_CODENAME[display];
-  if (!code) return null;
-  const file = `T_${code}_icon_normal.png`;
-  return available.has(file) ? file : null;
-};
-
-const data = JSON.parse(fs.readFileSync('app/data/markers.json', 'utf8'));
-fs.mkdirSync(ICONS_OUT, { recursive: true });
-
-const used = new Set();
-const missing = new Map();
 let tagged = 0;
+const missing = new Map();
 
 for (const m of data.markers) {
   if (m.category !== 'effigy') continue;
@@ -55,24 +27,17 @@ for (const m of data.markers) {
   if (display === 'C' || display === '') display = 'Lifmunk';
   m.label = `${display} Effigy`;
 
-  const icon = iconFor(display);
-  if (icon) { m.icon = icon; used.add(icon); tagged++; }
+  const file = `${display}_Effigy_icon.webp`;
+  if (have.has(file)) { m.icon = `effigy/${file}`; tagged++; }
   else missing.set(display, (missing.get(display) || 0) + 1);
 }
 
-for (const icon of used) fs.copyFileSync(path.join(ICONS_SRC, icon), path.join(ICONS_OUT, icon));
-
-// 1.0 has twelve effigy types, so the category isn't "Lifmunk" specific — only
-// the plain variant is. Individual markers keep their per-Pal label.
 const effigyCat = data.categories.find(c => c.id === 'effigy');
 if (effigyCat) effigyCat.name = 'Effigy';
 
-console.log(`effigies with a portrait: ${tagged} / ${data.markers.filter(m => m.category === 'effigy').length}`);
-console.log(`copied ${used.size} icons`);
+fs.writeFileSync(path, JSON.stringify(data, null, 2));
+console.log(`effigies with an icon: ${tagged} / ${data.markers.filter(m => m.category === 'effigy').length}`);
 if (missing.size) {
-  console.log('\nno codename mapping for:');
-  for (const [name, n] of missing) console.log(`  ${name} (${n})`);
+  console.log('\nno effigy icon for:');
+  for (const [name, n] of missing) console.log(`  ${name} (${n}) — expected ${name}_Effigy_icon.webp`);
 }
-
-data.generatedAt = new Date().toISOString();
-fs.writeFileSync('app/data/markers.json', JSON.stringify(data));

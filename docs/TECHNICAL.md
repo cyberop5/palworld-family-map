@@ -30,7 +30,8 @@ called `8247F1A5…` into "PP Island — Jim (Lv 48)".
 | Caged Boss | `NormalBossDefeatFlag` | spawner name (`SpawnerType: ImprisonmentBoss`) |
 | Note | `NoteObtainForInstanceFlag` | `NoteRowName` |
 
-Dungeons, Treasure Maps and Warp Points have no per-instance flag — reference markers only.
+Dungeons, Treasure Maps, Warp Points and Skill Fruit have no per-instance flag — reference
+markers only.
 
 ### Two traps that silently under-count
 
@@ -119,10 +120,17 @@ node tools/merge-bosses.mjs                        # spawners -> alpha pals + ca
 node tools/merge-locations.mjs                     # watchtowers, treasure maps, warp points
 node tools/merge-cell.mjs itemPickup <cell.json>   # one World Partition cell at a time
 node tools/merge-notes.mjs                         # note locations
-node tools/assign-effigy-icons.mjs                 # attach Pal portraits to effigies
 node tools/copy-ui-icons.mjs                       # official compass icons
-node tools/merge-skillfruit.mjs                    # needs the 46 cells in work/skillfruit-cells.txt
 node tools/verify-join.mjs                         # score markers against a real save
+```
+
+The steps above need the FModel exports. Three more transforms are **self-contained** — they need
+only the committed data, no game-file export, so they run on a clean clone:
+
+```bash
+node tools/assign-effigy-icons.mjs                 # point effigies at app/data/icons/effigy/*.webp
+node tools/rename-bosses.mjs                        # internal code names -> Paldeck names
+node tools/merge-skillfruit.mjs                     # 19 Palpagos trees from guide map coords
 ```
 
 Everything after `build-markers.mjs` merges into an existing `markers.json`, so each can be re-run
@@ -131,12 +139,20 @@ on its own. `merge-locations.mjs` needs `--max-old-space-size=6144` (the persist
 
 ## Known gaps
 
-- **Skill fruit, chests, eggs, resource nodes and fishing spots aren't included.** They sit in
-  fine-grained World Partition cells — 46, 1427, 649, 849 and 457 cells respectively — so adding
-  them means exporting the whole `MainWorld_5` folder. None has a save flag either (they respawn),
-  so they could only ever be reference markers. `work/type-cells.json` lists which cells hold what.
-- **Field boss names show internal codenames** ("Volcanic Monster" instead of "Blazamut").
-  Re-running `merge-bosses.mjs` now that `DT_PalNameText_Common` is exported would fix it.
+- **Chests, eggs, resource nodes and fishing spots aren't included.** They sit in fine-grained
+  World Partition cells — 1427, 649, 849 and 457 cells respectively — so adding them means exporting
+  the whole `MainWorld_5` folder. None has a save flag either (they respawn), so they could only
+  ever be reference markers. `work/type-cells.json` lists which cells hold what. **Skill fruit** was
+  in this bucket (46 cells) but is now shipped from guide map coordinates instead — see
+  `tools/merge-skillfruit.mjs`. It covers the 17 Palpagos trees only; the DLC-island trees use a
+  different map origin and aren't placed.
+- **Four newest boss names are descriptive, not Paldeck.** `tools/rename-bosses.mjs` maps 85 of 89
+  boss code names to real Paldeck names; PoseidonOrca, RockBeast, ThunderFluffyBird and WhiteDeer
+  aren't in any accessible datamine yet, so they keep a cleaned descriptive name until a source
+  lists them. A handful of elemental variants show the base species name for the same reason.
+- **Feybreak and Sakurajima markers render off the Palpagos texture.** The map is a single
+  Palpagos image; markers whose world coordinates fall outside it (Feybreak fast-travel points,
+  some bosses) land above the top edge. Fixing it means per-region map textures and transforms.
 - **Alpha/Caged bosses match 20 of 27.** The other 7 are *human* bosses (`BOSS_Hunter_Rifle`…)
   which aren't in the Pal spawner tables.
 - The **World Tree** is a separate map with its own texture; its markers are filtered out.
