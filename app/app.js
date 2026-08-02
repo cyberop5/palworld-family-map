@@ -100,12 +100,16 @@ const ICONS = {
   fastTravel: 'T_icon_compass_FTtower.png',
   dungeon: 'T_icon_compass_dungeon.png',
   towerBoss: 'T_icon_compass_tower.png',
-  ancientRuin: 'T_icon_compass_Search_Treasure.png',
+  // A custom drawing rather than a game asset — Palworld's own UI has no icon
+  // for the ruins specifically (the closest, Search_Treasure, is a generic
+  // treasure-hunt glyph shared with other things). Made by Void Possum.
+  ancientRuin: 'AncientRuin_icon_by_voidpossum.png',
   watchtower: 'T_icon_compass_FTUnlockMap.png',
   treasureMap: 'T_icon_compass_TreasureMap_01.png',
   warpPoint: 'T_icon_compass_Teleport.png',
   respawnPoint: 'T_icon_compass_Teleport_Direction.png',
   skillFruit: 'Skill_Fruit_icon.webp',
+  bounty: 'T_icon_compass_Bounty.png',
 };
 
 // Notes have no counterpart in the game's UI textures, so they keep a drawn glyph.
@@ -120,7 +124,7 @@ const PIN_SCALE = 1.25;
 // visual weight; dungeon/chest glyphs are near-solid and go smaller.
 const BASE_SIZE = {
   effigy: 26, alphaPal: 30, cagedBoss: 30, towerBoss: 30, dungeon: 19,
-  fastTravel: 34, note: 20, ancientRuin: 18,
+  fastTravel: 34, note: 20, ancientRuin: 26,
   watchtower: 32, treasureMap: 22, warpPoint: 24, skillFruit: 22,
   bounty: 22,
 };
@@ -144,7 +148,15 @@ const migrate = ids => new Set([...ids].map(id => id.replace(/^itemPickup:/, 'an
 
 let manual = migrate(loadSet(LS.manual));
 let auto = loadSet(LS.auto);
-const hiddenCats = loadSet(LS.hiddenCats);
+
+// 170 dungeon portals is a lot of small icons to greet a new install with, so
+// they start hidden — but only on a genuine first run. Keyed on "never saved a
+// choice before", not on "currently empty": hitting All deliberately produces
+// an empty set too, and that must stay empty on reload rather than silently
+// re-hiding dungeons behind the player's back.
+const hiddenCats = localStorage.getItem(LS.hiddenCats) === null
+  ? new Set(['dungeon'])
+  : loadSet(LS.hiddenCats);
 
 // How each category treats markers you've already found.
 const FOUND_STATES = ['shown', 'dim', 'hidden'];
@@ -370,10 +382,13 @@ function livePin(pos, html, size, popup) {
   return pin;
 }
 
+const YOU_PIN = `<div class="you-pin">
+  <img src="data/icons/ui/T_SignBoard_Icon_Cattiva_Pleading.png" alt="" decoding="async"></div>`;
+
 function placePlayer() {
   liveLayer.clearLayers();
   if (playerPos && mapOf(playerPos) === activeMap) {
-    liveLayer.addLayer(livePin(playerPos, '<div class="you-pin"></div>', 22, 'You are here'));
+    liveLayer.addLayer(livePin(playerPos, YOU_PIN, 30, 'You are here'));
   }
   for (const p of customPins) {
     if (mapOf(p) !== activeMap) continue;
