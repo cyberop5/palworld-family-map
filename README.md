@@ -61,8 +61,14 @@ The **●** button decides what happens to things you've already found: **●** 
 ## Common questions
 
 **Is this safe? Will I get banned?**
-No. PalMap only *reads* your Palworld save — it never changes it, never touches the game, and
-never sends anything anywhere. Palworld has no anti-cheat. You can leave the game running.
+No. PalMap only *reads* your Palworld save — it never changes it, never touches the game, and never
+sends any of your save data anywhere. Palworld has no anti-cheat. You can leave the game running.
+
+**Does PalMap phone home?**
+Once a day, one thing: it checks a public file on GitHub to see if a newer version exists, and shows
+a link in the footer if so. That's it — no save data, no identifiers, nothing about you or your
+world. It's `checkForUpdate()` in `app/app.js` if you'd rather see exactly what it does, or delete
+it.
 
 **Do I have to close Palworld?**
 No. Play normally and the map keeps up.

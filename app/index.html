@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PalMap — auto-tracking collectible map for Palworld</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="style.css?v=1.4.0">
+<link rel="stylesheet" href="style.css?v=1.5.0">
 <script src="vendor/leaflet.js"></script>
 <script type="importmap">
 { "imports": { "ooz-wasm": "./vendor/ooz-wasm/index.js" } }
@@ -94,13 +94,23 @@
   <footer>
     <p class="note" id="ver">
       <a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>
-      · v1.4.0
+      · v1.5.0
+    </p>
+    <!-- The one thing PalMap ever sends outbound: once a day, one GET to a
+         public static file on GitHub, to compare version numbers. See
+         checkForUpdate() in app.js, or the README, for what it does and doesn't
+         send. -->
+    <p class="note update-row">
+      <a id="update-badge" class="update-link" href="https://github.com/voidpossum/PalMap/archive/refs/heads/main.zip"
+         target="_blank" rel="noopener" hidden>Update available ↗</a>
+      <button id="update-check-btn" class="link plain" type="button">Check for updates</button>
+      <span id="update-status" class="update-status"></span>
     </p>
   </footer>
 </aside>
 
 <div id="map"></div>
 
-<script type="module" src="app.js?v=1.4.0"></script>
+<script type="module" src="app.js?v=1.5.0"></script>
 </body>
 </html>

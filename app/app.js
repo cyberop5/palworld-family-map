@@ -703,12 +703,74 @@ async function nameWorld(w) {
 }
 
 // Footer stamp — shows at a glance which app.js ran and which path is live.
+const VERSION = '1.5.0';
 const stamp = mode => {
   const el = document.getElementById('ver');
   if (el) el.innerHTML =
     `<a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>`
-    + ` · v1.4.0 · ${escapeHtml(mode)}`;
+    + ` · v${VERSION} · ${escapeHtml(mode)}`;
 };
+
+// --- update check -------------------------------------------------------
+// The only outbound request PalMap ever makes. Reads package.json straight off
+// GitHub's raw-file CDN rather than the Releases API: the repo has tags but no
+// published Releases, so Releases would report nothing until that habit starts,
+// and package.json is already bumped on every version with nothing new to keep
+// in sync. Versions here are always x.y.z, so a plain per-segment numeric
+// compare is all that's needed — no semver library.
+const UPDATE_URL = 'https://raw.githubusercontent.com/voidpossum/PalMap/main/package.json';
+const LS_UPDATE_CHECKED = 'palmap.lastUpdateCheck';
+const LS_UPDATE_LATEST = 'palmap.latestVersion';
+const UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+const isNewer = (a, b) => {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+};
+
+function paintUpdateBadge(latest) {
+  const badge = document.getElementById('update-badge');
+  if (badge) badge.hidden = !(latest && isNewer(latest, VERSION));
+}
+
+async function checkForUpdate({ force = false } = {}) {
+  const statusEl = document.getElementById('update-status');
+  const lastChecked = Number(localStorage.getItem(LS_UPDATE_CHECKED));
+  const cached = localStorage.getItem(LS_UPDATE_LATEST);
+
+  if (!force && lastChecked && Date.now() - lastChecked < UPDATE_INTERVAL_MS) {
+    paintUpdateBadge(cached);
+    return;
+  }
+
+  if (force && statusEl) statusEl.textContent = 'Checking…';
+  try {
+    const res = await fetch(`${UPDATE_URL}?_=${Date.now()}`);
+    if (!res.ok) throw new Error(res.status);
+    const latest = (await res.json()).version;
+    if (typeof latest !== 'string') throw new Error('no version field');
+
+    // Only a *successful* check resets the clock — a blocked or offline
+    // attempt shouldn't start a fake day-long cooldown, it should just try
+    // again next launch.
+    localStorage.setItem(LS_UPDATE_CHECKED, String(Date.now()));
+    localStorage.setItem(LS_UPDATE_LATEST, latest);
+    paintUpdateBadge(latest);
+    if (force && statusEl) {
+      statusEl.textContent = isNewer(latest, VERSION) ? '' : 'Up to date';
+    }
+  } catch {
+    // Silent — this is a footnote, not something the app depends on.
+    if (force && statusEl) statusEl.textContent = "Couldn't check right now";
+  }
+}
+
+document.getElementById('update-check-btn').onclick = () => checkForUpdate({ force: true });
+checkForUpdate();
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
 // Refresh right after picking something up legitimately finds nothing new.

@@ -416,6 +416,22 @@ select:hover { border-color: var(--accent); }
   text-underline-offset: 2px;
 }
 .author:hover { color: var(--text); }
+
+.update-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.update-link {
+  color: var(--found, #4ade80);
+  font-weight: 600;
+  text-decoration: none;
+}
+.update-link:hover { text-decoration: underline; }
+.update-status { color: var(--muted); }
+
 /* ---- map ---- */
 #map { position: absolute; inset: 0; background: #0a0d13; }
 .leaflet-container { background: #0a0d13; }

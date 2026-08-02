@@ -76,6 +76,19 @@ to reveal map — carries a `FastTravelPointID`, so the game files it under
 flags with no marker; adding the category took fast travel from 58/68 to **70/70, zero orphans**.
 This is also the "hackable EXP tower" and the "map-reveal tower" — one object, three names.
 
+## Update check
+
+The one thing PalMap sends outbound. `checkForUpdate()` in `app/app.js` fetches
+`raw.githubusercontent.com/voidpossum/PalMap/main/package.json` — once a day (cached in
+`localStorage`, and only a *successful* check resets the clock, so a blocked or offline attempt
+just retries next launch, not a day later) or on demand from the footer's "Check for updates"
+button — and compares its `version` field against this build's own.
+
+Reads `package.json` rather than GitHub's Releases API on purpose: the repo has tags but no
+published Releases, so Releases would report nothing until that habit starts, and `package.json` is
+already bumped on every version with nothing new to keep in sync. No save data or identifiers are
+sent; the request carries nothing but the URL.
+
 ## The local API
 
 Auto-sync needs to re-read a file on a timer. In a browser only the File System Access API can do
