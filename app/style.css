@@ -282,6 +282,15 @@ select:hover { border-color: var(--accent); }
 }
 .cat .count.done { color: var(--found); }
 
+/* Reference categories show a plain total, not "found / total" — there is
+   nothing to finish. Dimmer than a real count so the eye doesn't read it as
+   progress that's stuck at zero. */
+.cat .count.ref-count { opacity: .5; }
+
+/* Reference rows have no progress bar, so they'd otherwise sit 2px tighter than
+   the counted rows above them and the list would look ragged. */
+#categories li.ref { padding-bottom: 2px; }
+
 /* Unchecked categories recede rather than disappear. */
 .cat:has(input:not(:checked)) .name,
 .cat:has(input:not(:checked)) .count { opacity: .45; }
@@ -306,6 +315,39 @@ select:hover { border-color: var(--accent); }
   transition: width .3s ease;
 }
 #categories li:has(input:not(:checked)) .cat-bar i { opacity: .35; }
+
+/* Two maps, so a segmented pair rather than a dropdown — there will never be a
+   third, and one click beats two. */
+.map-switch {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .03);
+}
+.map-switch button {
+  flex: 1;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.map-switch button:hover { color: var(--text); }
+.map-switch button.on {
+  background: var(--panel-2);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
+
+/* Sits under the sync status, so it reads as a footnote to it rather than a
+   second message competing for attention. */
+.save-note { margin-top: 6px; opacity: .8; }
 
 /* Splits the auto-syncing categories from the manual ones. Needs real space
    above it — the preceding row ends in its own progress bar, and tight against
@@ -463,6 +505,25 @@ select:hover { border-color: var(--accent); }
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--tint);
   border: 2px solid rgba(0, 0, 0, .6);
+}
+
+/* ---- live pins: where you are, and the pins you dropped in-game ---- */
+/* Neither is a collectible, so both deliberately look unlike a category pin:
+   no icon, no category colour, just a bright mark that reads as "now". */
+.you-pin {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent, #4ea1ff);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), 0 0 12px 2px rgba(78, 161, 255, .8);
+  transform: scale(var(--pin-scale, 1));
+}
+.custom-pin {
+  width: 68%; height: 68%;
+  margin: 16%;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, .6);
+  transform: rotate(45deg) scale(var(--pin-scale, 1));
 }
 
 /* found markers, where the category asks for them to be dimmed */

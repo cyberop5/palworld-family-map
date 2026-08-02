@@ -12,3 +12,6 @@ extract/fmodel-export/
 
 # Local editor/preview config, not needed to run PalMap.
 .claude/
+
+# Reference screenshots dropped in by hand while working. Not part of the app.
+raw/

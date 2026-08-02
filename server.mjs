@@ -93,9 +93,21 @@ function playerSavePath(worldId) {
   return player ? inSaves(path.resolve(dir, 'Players', player)) : null;
 }
 
-function metaSavePath(worldId) {
+// LevelMeta.sav names the world; WorldOption.sav carries the server settings,
+// including how often the game autosaves; LocalData.sav holds the pins the
+// player dropped on the in-game map. All three are handed over as raw bytes and
+// decoded in the page, same as the player save — that's what keeps this file
+// free of any save-parsing dependency.
+const WORLD_FILES = {
+  meta: 'LevelMeta.sav',
+  worldoption: 'WorldOption.sav',
+  localdata: 'LocalData.sav',
+};
+
+function worldFilePath(worldId, which) {
   const dir = worldDir(worldId);
-  return dir ? inSaves(path.resolve(dir, 'LevelMeta.sav')) : null;
+  const name = WORLD_FILES[which];
+  return dir && name ? inSaves(path.resolve(dir, name)) : null;
 }
 
 // --- hand-ticked progress ---------------------------------------------------
@@ -174,9 +186,14 @@ function handler(req, res) {
   // ---- read-only save API ----
   if (url === '/api/worlds') { sendJson(res, listWorlds()); return; }
 
-  // Raw LevelMeta.sav — the page decodes it to name the world.
-  if (url === '/api/meta') {
-    const file = metaSavePath(params.get('world'));
+  // Raw world-level saves — the page decodes them. LocalData.sav is optional
+  // (co-op guests don't have one), so a 404 here is not an error worth shouting
+  // about; the page just shows no in-game pins.
+  const which = url === '/api/meta' ? 'meta'
+    : url === '/api/worldoption' ? 'worldoption'
+      : url === '/api/localdata' ? 'localdata' : null;
+  if (which) {
+    const file = worldFilePath(params.get('world'), which);
     if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
     res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(fs.readFileSync(file));

@@ -36,26 +36,42 @@ Open FModel. The first screen asks for a game directory.
 
 This tells FModel what the data inside the game means. **I've already downloaded it for you.**
 
-1. Go to **Settings** (gear icon) → **General**.
+1. Go to **Settings** (gear icon) → **General**. It has to be *General* — the mappings setting is
+   not on the Models tab.
 2. Find **Local Mappings File** and set it to **Enabled**.
 3. In **Mapping File Path**, browse to:
    ```
-   D:\AI\Claude\Code\PalMap\extract\Mappings.usmap
+   D:\AI\Claude\Code\PalMap\tools\Mappings.usmap
    ```
 4. While you're in Settings, also set:
    - **Texture Format** → `PNG`
 5. Click **Save** and restart FModel if it asks.
 
-## Step 4 — Export the map image
+> **If you skip this, exports fail with:**
+> `Package has unversioned properties but mapping file (.usmap) is missing, can't serialize.`
+> That message is about this step, not about whatever you were trying to export.
+
+## Step 4 — Export the map images
+
+There are two: `T_WorldMap` (Palpagos and both DLC island groups) and `T_TreeMap` (the World Tree,
+which is a separate level with its own map).
 
 1. In the search box at the top, type: `T_WorldMap`
 2. You want the result at this path:
    ```
    Pal/Content/Pal/Texture/UI/Map/T_WorldMap
    ```
-3. **Right-click it → Export Raw Data (.png)**
+3. **Double-click it first.** FModel only enables the texture actions once it has actually decoded
+   the package — until then *Save Texture* is greyed out. The image should appear in the preview
+   panel.
+4. Now **right-click it → Save Texture** (or *Export Raw Data (.png)*).
+5. Repeat for `T_TreeMap` in the same folder.
 
-   (If you see a "Save Textures" or "Export" option instead, that's fine too — we just need the PNG.)
+Both are ~700 bytes in the file list. That's normal — it's just the header; the pixels live in the
+`.pak` bulk data and the export is ~30 MB.
+
+Copy the two PNGs to `app/data/T_WorldMap.png` and `app/data/T_TreeMap.png`, then run
+`node tools/calibrate.mjs` to confirm the markers still land where they should.
 
 ## Step 5 — Export the world data
 

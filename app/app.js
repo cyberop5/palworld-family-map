@@ -2,47 +2,79 @@
 // © Void Possum
 
 import { parseSave } from './lib/palsave.mjs';
+import { readCustomPins } from './lib/localpins.mjs';
 
-// --- world -> image transform ----------------------------------------------
-// The map's horizontal axis is world Y (east positive) and its vertical axis is
-// world X inverted (north is up). One box for the whole world — Palpagos and
-// both DLC island groups sit in a single continuous coordinate space at a
-// single scale.
+// --- maps and their world -> image transforms -------------------------------
+// Palworld has two maps, and says so itself: a save's RecordData carries
+// UnlockedWorldMapFlags = { MainMap, Tree }. MainMap is Palpagos plus both DLC
+// island groups, all in one continuous coordinate space; the World Tree is a
+// separate instanced level with its own texture, its own corner of world space
+// and — the part that isn't obvious — its own in-game coordinate origin and
+// scale. Nothing about one carries over to the other.
 //
-// The box is square on purpose: T_WorldMap is a square 8192px texture, so the
-// world region it covers must be square too — the same world-units-per-pixel
-// on both axes. The long-standing box wasn't: its two axes differed by 0.75%,
-// which is invisible near the middle of the map and grows to ~30px out at
-// Feybreak and the Sky Islands, which is exactly where markers looked "close,
-// but beside the thing rather than on it". That one defect is what an earlier
-// version of this file mistook for three separate regional problems and tried
-// to patch with a box per landmass; there is no such thing, and the
-// per-region code is gone.
+// On both, the horizontal axis is world Y (east positive) and the vertical axis
+// is world X inverted (north up).
 //
-// Derived by cross-referencing paldb.cc's published map, which lists 867
-// markers with both their in-game coordinates and their position on the same
-// 8192px artwork; a single uniform-scale affine fits all 867 to under 2px.
-// Verified independently against our own texture by tools/calibrate.mjs:
-// every one of the 332 land-guaranteed markers lands on land, and so do all
-// 360 effigies — which are pure held-out data, never used in any fit.
-const WORLD = { minX: -1099401, maxX: 349385, minY: -724397, maxY: 724389 };
+// Both boxes are square on purpose: each texture is a square 8192px image, so
+// the world region it covers must be square too — the same world-units-per-pixel
+// on both axes. MainMap's long-standing box wasn't, and its two axes differed by
+// 0.75%: invisible mid-map, ~30px out at Feybreak and the Sky Islands, which is
+// exactly where markers used to sit beside the thing rather than on it. An
+// earlier version of this file mistook that one global defect for three separate
+// regional problems and tried to patch it with a box per landmass. There is no
+// such thing, and that code is gone.
+//
+// Both were derived by cross-referencing paldb.cc, which publishes the same two
+// 8192px textures as tile pyramids:
+//   MainMap — 867 markers carrying both in-game coordinates and tile positions;
+//     one uniform-scale affine fits all 867 to under 2px.
+//   Tree    — fitted on the 15 fast travel points instead, matched by name so
+//     the fit uses our exact world coordinates rather than paldb's rounded
+//     integer display values. Max residual 0.05px, and the two axis scales
+//     agree to 0.0006%.
+// tools/calibrate.mjs re-checks both against our own textures, holding out
+// every effigy.
 const IMAGE = 8192;
 
-function worldToLatLng(wx, wy) {
-  const u = (wy - WORLD.minY) / (WORLD.maxY - WORLD.minY);       // 0..1 west->east
-  const v = 1 - (wx - WORLD.minX) / (WORLD.maxX - WORLD.minX);   // 0..1 north->south
+const MAPS = [
+  {
+    id: 'palpagos',
+    name: 'Palpagos',
+    texture: 'data/T_WorldMap.png',
+    world: { minX: -1099401, maxX: 349385, minY: -724397, maxY: 724389 },
+    // The in-game map's own coordinate readout, so popups show what the pause
+    // menu and paldb show rather than raw save units. Validated against Arena
+    // Entrance -> 629, 14 and Azure Covenant Tower -> -423, -1426.
+    coords: { div: 459, offY: -158000, offX: 123888 },
+  },
+  {
+    id: 'worldTree',
+    name: 'World Tree',
+    texture: 'data/T_TreeMap.png',
+    world: { minX: 347350, maxX: 689148, minY: -818197, maxY: -476399 },
+    // Different origin *and* different scale from Palpagos — 1334 world units
+    // per map unit rather than 459. Reproduces paldb's published coordinate for
+    // 14 of the 15 fast travel points exactly, the last off by one.
+    coords: { div: 1334, offY: 647509, offX: 517733 },
+  },
+];
+
+// The World Tree sits in an isolated corner of world space, so a range check
+// separates the two maps the same way it always has. Everything else is MainMap.
+const isWorldTree = m => m.x >= 400000 && m.y <= -500000;
+const mapOf = m => (isWorldTree(m) ? MAPS[1] : MAPS[0]);
+
+function worldToLatLng(wx, wy, map) {
+  const { minX, maxX, minY, maxY } = map.world;
+  const u = (wy - minY) / (maxY - minY);       // 0..1 west->east
+  const v = 1 - (wx - minX) / (maxX - minX);   // 0..1 north->south
   // CRS.Simple's y grows upward, but v is measured from the top.
   return [(1 - v) * IMAGE, u * IMAGE];
 }
 
-// The in-game map's own coordinate readout — not our pixel-fit transform above.
-// Validated against two known points: Arena Entrance -> 629, 14, and (live, in
-// the Sky Islands DLC area) PIDF/Azure Covenant Tower's raw save coords -778216,
-// -36026 -> -423, -1426, matching the number the pause-menu map shows exactly.
-// Shown in popups instead of raw save units so it's directly comparable to what
-// the player sees in-game or on sites like paldb.cc.
-function toMapCoords(wx, wy) {
-  return [Math.round((wy - 158000) / 459), Math.round((wx + 123888) / 459)];
+function toMapCoords(wx, wy, map) {
+  const { div, offY, offX } = map.coords;
+  return [Math.round((wy + offY) / div), Math.round((wx + offX) / div)];
 }
 
 const COLORS = {
@@ -53,11 +85,13 @@ const COLORS = {
   cagedBoss: '#cbd5e1',
   dungeon: '#c084fc',
   note: '#fbbf24',
-  itemPickup: '#22d3ee',
+  ancientRuin: '#22d3ee',
   watchtower: '#2dd4bf',
   treasureMap: '#facc15',
   warpPoint: '#a78bfa',
   skillFruit: '#f472b6',
+  bounty: '#f43f5e',
+  player: '#ffffff',
 };
 
 // Official in-game compass icons, copied by extract/copy-ui-icons.mjs and
@@ -66,7 +100,7 @@ const ICONS = {
   fastTravel: 'T_icon_compass_FTtower.png',
   dungeon: 'T_icon_compass_dungeon.png',
   towerBoss: 'T_icon_compass_tower.png',
-  itemPickup: 'T_icon_compass_Search_Treasure.png',
+  ancientRuin: 'T_icon_compass_Search_Treasure.png',
   watchtower: 'T_icon_compass_FTUnlockMap.png',
   treasureMap: 'T_icon_compass_TreasureMap_01.png',
   warpPoint: 'T_icon_compass_Teleport.png',
@@ -86,8 +120,9 @@ const PIN_SCALE = 1.25;
 // visual weight; dungeon/chest glyphs are near-solid and go smaller.
 const BASE_SIZE = {
   effigy: 26, alphaPal: 30, cagedBoss: 30, towerBoss: 30, dungeon: 19,
-  fastTravel: 34, note: 20, itemPickup: 18,
+  fastTravel: 34, note: 20, ancientRuin: 18,
   watchtower: 32, treasureMap: 22, warpPoint: 24, skillFruit: 22,
+  bounty: 22,
 };
 const sizeFor = category => Math.round((BASE_SIZE[category] || 22) * PIN_SCALE);
 
@@ -102,7 +137,12 @@ const LS = {
 const loadSet = k => new Set(JSON.parse(localStorage.getItem(k) || '[]'));
 const saveSet = (k, s) => localStorage.setItem(k, JSON.stringify([...s]));
 
-let manual = loadSet(LS.manual);
+// 1.4 renamed the "Item Pickup" category to "Ancient Ruin" once we worked out
+// that's what those 106 objects are. Marker ids carry the category, so old hand
+// ticks would otherwise be orphaned; rewriting the prefix on read keeps them.
+const migrate = ids => new Set([...ids].map(id => id.replace(/^itemPickup:/, 'ancientRuin:')));
+
+let manual = migrate(loadSet(LS.manual));
 let auto = loadSet(LS.auto);
 const hiddenCats = loadSet(LS.hiddenCats);
 
@@ -151,7 +191,7 @@ async function loadManual(worldId) {
     if (Array.isArray(saved) && saved.length) {
       // The file is authoritative once it exists, otherwise un-ticking would
       // be undone on the next reload.
-      manual = new Set(saved);
+      manual = migrate(saved);
       saveSet(LS.manual, manual);
     } else if (manual.size) {
       persistManual();   // first run: lift existing local ticks into the file
@@ -171,7 +211,7 @@ const map = L.map('map', {
 L.control.zoom({ position: 'topright' }).addTo(map);
 
 const bounds = [[0, 0], [IMAGE, IMAGE]];
-L.imageOverlay('data/T_WorldMap.png', bounds).addTo(map);
+const overlay = L.imageOverlay(MAPS[0].texture, bounds).addTo(map);
 // The sidebar floats over the map's left edge, so bias the initial fit right by
 // its width — otherwise the island centres partly underneath it.
 map.fitBounds(bounds, { paddingTopLeft: [300, 0] });
@@ -181,22 +221,47 @@ map.setMaxBounds([[-IMAGE * 0.1, -IMAGE * 0.1], [IMAGE * 1.1, IMAGE * 1.1]]);
 const res = await fetch('data/markers.json');
 const { categories, markers: allMarkers } = await res.json();
 
-// The World Tree is a separate instanced map with its own texture, tucked into an
-// isolated corner of world space. Everything else — Palpagos and the Sakurajima /
-// Feybreak islands — belongs on this one.
-const isWorldTree = m => m.x >= 400000 && m.y <= -500000;
-const markers = allMarkers.filter(m => !isWorldTree(m));
+// Every marker belongs to exactly one map, so its pin is built once with that
+// map's transform and never has to move. Switching maps only changes which pins
+// are on screen, not where any of them are.
+let activeMap = MAPS.find(m => m.id === localStorage.getItem('palmap.map')) || MAPS[0];
+let markers = [];
 
-// Indexes built once; refresh() used to re-filter the whole array per category.
-const byCategory = new Map();
+const byCategory = new Map();     // active map only — drives the sidebar and counts
+const everyCategory = new Map();  // both maps — drives the save join
 const pins = new Map();     // marker id -> L.Marker
 const layers = new Map();   // category id -> L.LayerGroup
 
 for (const cat of categories) {
   layers.set(cat.id, L.layerGroup().addTo(map));
   byCategory.set(cat.id, []);
+  everyCategory.set(cat.id, []);
 }
-for (const m of markers) byCategory.get(m.category)?.push(m);
+for (const m of allMarkers) everyCategory.get(m.category)?.push(m);
+
+// Rebuilds everything that depends on which map is showing. Cheap enough to run
+// on every switch: it re-buckets ~1,150 markers and repaints one list.
+function selectMap(next, { fit = true } = {}) {
+  activeMap = next;
+  localStorage.setItem('palmap.map', next.id);
+
+  overlay.setUrl(next.texture);
+  markers = allMarkers.filter(m => mapOf(m) === next);
+
+  for (const cat of categories) byCategory.set(cat.id, []);
+  for (const m of markers) byCategory.get(m.category)?.push(m);
+
+  for (const layer of layers.values()) layer.clearLayers();
+  for (const btn of document.querySelectorAll('[data-map]')) {
+    btn.classList.toggle('on', btn.dataset.map === next.id);
+  }
+
+  renderSidebar();
+  applyVisibility();
+  updateCounts();
+  placePlayer();
+  if (fit) map.fitBounds(bounds, { paddingTopLeft: [300, 0] });
+}
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -243,7 +308,7 @@ function pinFor(m) {
     html = `<div class="dot-pin" style="--tint:${color}"></div>`;
   }
 
-  const marker = L.marker(worldToLatLng(m.x, m.y), {
+  const marker = L.marker(worldToLatLng(m.x, m.y, mapOf(m)), {
     icon: L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
     keyboard: false,
   });
@@ -251,15 +316,17 @@ function pinFor(m) {
   return marker;
 }
 
+const catName = id => (categories.find(c => c.id === id) || {}).name || id;
+
 function openPopup(m, marker) {
   const fromSave = auto.has(m.id);
   const found = isFound(m.id);
-  const [mapX, mapY] = toMapCoords(m.x, m.y);
+  const [mapX, mapY] = toMapCoords(m.x, m.y, mapOf(m));
   const el = document.createElement('div');
   el.innerHTML = `
     <div class="popup-title">${escapeHtml(m.label)}</div>
     <div class="popup-meta">
-      ${m.category} &middot; ${mapX}, ${mapY}
+      ${escapeHtml(catName(m.category))} &middot; ${mapX}, ${mapY}
       ${fromSave ? '<br><span class="src-auto">✓ found — from your save</span>' : ''}
     </div>`;
   if (!fromSave) {
@@ -278,9 +345,40 @@ function openPopup(m, marker) {
   marker.bindPopup(el).openPopup();
 }
 
-for (const m of markers) {
+for (const m of allMarkers) {
   const pin = pinFor(m);
   pins.set(m.id, pin);
+}
+
+// --- live from your save ----------------------------------------------------
+// Two things that aren't collectibles and so aren't markers: where you're
+// standing, and the pins you dropped on the in-game map. Both come from the
+// save and are replaced wholesale on every sync, so they live in their own
+// layer with no category, no count and no tick.
+let playerPos = null;    // { x, y } raw world coords, from LastTransform
+let customPins = [];     // [{ x, y }] from LocalData.sav
+const liveLayer = L.layerGroup().addTo(map);
+
+function livePin(pos, html, size, popup) {
+  const pin = L.marker(worldToLatLng(pos.x, pos.y, activeMap), {
+    icon: L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+    keyboard: false,
+    zIndexOffset: 1000,
+  });
+  const [mx, my] = toMapCoords(pos.x, pos.y, activeMap);
+  pin.bindPopup(`<div class="popup-title">${popup}</div><div class="popup-meta">${mx}, ${my}</div>`);
+  return pin;
+}
+
+function placePlayer() {
+  liveLayer.clearLayers();
+  if (playerPos && mapOf(playerPos) === activeMap) {
+    liveLayer.addLayer(livePin(playerPos, '<div class="you-pin"></div>', 22, 'You are here'));
+  }
+  for (const p of customPins) {
+    if (mapOf(p) !== activeMap) continue;
+    liveLayer.addLayer(livePin(p, '<div class="custom-pin"></div>', 16, 'Your map pin'));
+  }
 }
 
 // --- visibility -------------------------------------------------------------
@@ -338,6 +436,9 @@ const listEl = document.getElementById('categories');
 
 function updateCounts() {
   for (const cat of categories) {
+    // Reference categories aren't collections, so they have no counter or bar
+    // to update — see renderSidebar().
+    if (cat.reference) continue;
     const mine = byCategory.get(cat.id);
     if (!mine?.length) continue;
     const found = mine.reduce((n, m) => n + (isFound(m.id) ? 1 : 0), 0);
@@ -358,64 +459,88 @@ function paintFoundBtn(btn, catId) {
   btn.title = `${FOUND_TITLE[s]} — click to cycle, shift-click to set every category`;
 }
 
-// Auto-syncing categories first, then the manual ones under a divider. Mixed
-// together, a ✋ category stuck on 0 just looks broken.
-const orderedCats = [...categories].sort((a, b) => (a.saveFlag ? 0 : 1) - (b.saveFlag ? 0 : 1));
-let dividerDone = false;
+// Three tiers, in this order:
+//   0  auto-synced collections — tick themselves from the save
+//   1  hand-tracked collections — a total you can finish, but you tick it
+//   2  reference — dungeons, treasure maps, warp points, skill fruit, bounties
+//
+// Tier 2 exists because those aren't collections at all. Dungeons reset, skill
+// fruit trees regrow, bounty targets respawn; a treasure map is a place you go,
+// not a thing you complete. Showing "0 / 170" against them invented a score
+// nobody was playing for, and made the sidebar read as failure. They keep their
+// tick — handy for marking a treasure map you've already dug — but no counter
+// and no bar.
+//
+// Tier 1 is empty today, since every non-auto category is currently reference.
+// It's here so that adding a hand-tracked *collectible* later doesn't silently
+// file it under reference.
+const tierOf = cat => (cat.saveFlag ? 0 : cat.reference ? 2 : 1);
+const TIER_LABEL = { 1: 'Tick by hand', 2: 'Reference — not counted' };
 
-for (const cat of orderedCats) {
-  const mine = byCategory.get(cat.id);
-  if (!mine?.length) continue;
+function renderSidebar() {
+  listEl.innerHTML = '';
+  const ordered = [...categories].sort((a, b) => tierOf(a) - tierOf(b));
+  let lastTier = 0;
 
-  if (!cat.saveFlag && !dividerDone) {
-    const sep = document.createElement('li');
-    sep.className = 'cat-divider';
-    sep.innerHTML = '<span>Tick by hand</span>';
-    listEl.appendChild(sep);
-    dividerDone = true;
+  for (const cat of ordered) {
+    const mine = byCategory.get(cat.id);
+    if (!mine?.length) continue;
+
+    const tier = tierOf(cat);
+    if (tier !== lastTier) {
+      const sep = document.createElement('li');
+      sep.className = 'cat-divider';
+      sep.innerHTML = `<span>${TIER_LABEL[tier]}</span>`;
+      listEl.appendChild(sep);
+      lastTier = tier;
+    }
+
+    // Only categories with a save flag can tick themselves; the rest are manual.
+    // Saying so inline stops "why didn't my treasure maps update?" before it starts.
+    const badge = cat.reference
+      ? ''
+      : cat.saveFlag
+        ? `<span class="sync-badge" title="Supports auto-sync — these tick themselves from your save file">⟳</span>`
+        : `<span class="sync-badge manual" title="Manual only — Palworld doesn't record these in the save, so tick them by hand">✋</span>`;
+
+    const colour = COLORS[cat.id] || '#94a3b8';
+    const swatch = categorySwatch(cat.id, colour);
+
+    const li = document.createElement('li');
+    li.className = cat.reference ? 'ref' : '';
+    li.innerHTML = `
+      <div class="cat" style="--cat:${colour}">
+        <label class="cat-main">
+          <input type="checkbox" data-cat="${cat.id}" ${hiddenCats.has(cat.id) ? '' : 'checked'}>
+          ${swatch}
+          <span class="name">${escapeHtml(cat.name)}</span>
+          ${badge}
+          ${cat.reference ? `<span class="count ref-count">${mine.length}</span>`
+        : `<span class="count" data-count="${cat.id}"></span>`}
+        </label>
+        <button class="found-btn" data-found="${cat.id}"></button>
+      </div>
+      ${cat.reference ? '' : `<div class="cat-bar"><i data-bar="${cat.id}"></i></div>`}`;
+    listEl.appendChild(li);
+
+    li.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) hiddenCats.delete(cat.id); else hiddenCats.add(cat.id);
+      saveSet(LS.hiddenCats, hiddenCats);
+      applyVisibility();
+    });
+
+    const btn = li.querySelector('.found-btn');
+    paintFoundBtn(btn, cat.id);
+    btn.addEventListener('click', e => {
+      const next = FOUND_STATES[(FOUND_STATES.indexOf(stateOf(cat.id)) + 1) % FOUND_STATES.length];
+      if (e.shiftKey) for (const c of categories) foundState[c.id] = next;
+      else foundState[cat.id] = next;
+
+      localStorage.setItem(LS.foundState, JSON.stringify(foundState));
+      listEl.querySelectorAll('.found-btn').forEach(b => paintFoundBtn(b, b.dataset.found));
+      applyVisibility();
+    });
   }
-
-  // Only categories with a save flag can tick themselves; the rest are manual.
-  // Saying so inline stops "why didn't my treasure maps update?" before it starts.
-  const badge = cat.saveFlag
-    ? `<span class="sync-badge" title="Supports auto-sync — these tick themselves from your save file">⟳</span>`
-    : `<span class="sync-badge manual" title="Manual only — Palworld doesn't record these in the save, so tick them by hand">✋</span>`;
-
-  const colour = COLORS[cat.id] || '#94a3b8';
-  const swatch = categorySwatch(cat.id, colour);
-
-  const li = document.createElement('li');
-  li.innerHTML = `
-    <div class="cat" style="--cat:${colour}">
-      <label class="cat-main">
-        <input type="checkbox" data-cat="${cat.id}" ${hiddenCats.has(cat.id) ? '' : 'checked'}>
-        ${swatch}
-        <span class="name">${escapeHtml(cat.name)}</span>
-        ${badge}
-        <span class="count" data-count="${cat.id}"></span>
-      </label>
-      <button class="found-btn" data-found="${cat.id}"></button>
-    </div>
-    <div class="cat-bar"><i data-bar="${cat.id}"></i></div>`;
-  listEl.appendChild(li);
-
-  li.querySelector('input').addEventListener('change', e => {
-    if (e.target.checked) hiddenCats.delete(cat.id); else hiddenCats.add(cat.id);
-    saveSet(LS.hiddenCats, hiddenCats);
-    applyVisibility();
-  });
-
-  const btn = li.querySelector('.found-btn');
-  paintFoundBtn(btn, cat.id);
-  btn.addEventListener('click', e => {
-    const next = FOUND_STATES[(FOUND_STATES.indexOf(stateOf(cat.id)) + 1) % FOUND_STATES.length];
-    if (e.shiftKey) for (const c of categories) foundState[c.id] = next;
-    else foundState[cat.id] = next;
-
-    localStorage.setItem(LS.foundState, JSON.stringify(foundState));
-    listEl.querySelectorAll('.found-btn').forEach(b => paintFoundBtn(b, b.dataset.found));
-    applyVisibility();
-  });
 }
 
 const setAllCategories = on => {
@@ -481,16 +606,24 @@ function syncFromBytes(bytes, label) {
   for (const cat of categories) {
     if (!cat.saveFlag) continue;
     const flags = flagSet([cat.saveFlag, ...(EXTRA_FLAGS[cat.id] || [])]);
-    for (const m of byCategory.get(cat.id) || []) {
+    // Every marker on both maps, not just the visible one — otherwise switching
+    // maps would quietly discard the other map's progress on the next sync.
+    for (const m of everyCategory.get(cat.id) || []) {
       if (flags.has(m.key)) { next.add(m.id); matched++; }
     }
   }
+
+  // Where the character was standing when the game last wrote the save. Free —
+  // this file is already fetched and parsed on every sync.
+  const t = save.data?.SaveData?.LastTransform?.Translation;
+  playerPos = t && Number.isFinite(t.x) ? { x: t.x, y: t.y } : null;
 
   auto = next;
   saveSet(LS.auto, auto);
   if (label) localStorage.setItem(LS.profile, label);
   applyVisibility();
   updateCounts();
+  placePlayer();
   return matched;
 }
 
@@ -559,7 +692,7 @@ const stamp = mode => {
   const el = document.getElementById('ver');
   if (el) el.innerHTML =
     `<a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>`
-    + ` · v1.3.0 · ${escapeHtml(mode)}`;
+    + ` · v1.4.0 · ${escapeHtml(mode)}`;
 };
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
@@ -584,12 +717,52 @@ async function syncWorld(w, isAuto = false) {
   );
 }
 
+// Palworld writes the save on a timer, and the world decides that timer:
+// WorldOption.sav's autoSaveSpan, 30 seconds by default. Nothing PalMap does can
+// beat it, so hammering Sync now after picking something up can only ever show
+// the same numbers. Reading the actual value beats a hardcoded guess — a server
+// with a slower span would otherwise look broken for minutes at a time.
+let autoSaveSpan = null;
+
+async function readAutoSaveSpan(w) {
+  try {
+    const res = await fetch(`/api/worldoption?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) throw new Error(res.status);
+    const sd = parseSave(new Uint8Array(await res.arrayBuffer())).data?.OptionWorldData?.Settings;
+    const span = Number(sd?.autoSaveSpan);
+    autoSaveSpan = Number.isFinite(span) && span > 0 ? span : null;
+  } catch {
+    autoSaveSpan = null;
+  }
+  const el = document.getElementById('save-note');
+  if (el) {
+    el.textContent = `Palworld saves every ${autoSaveSpan ?? 30}s — anything you just picked up shows up within about that long.`;
+    el.hidden = false;
+  }
+}
+
+// The pins you dropped on the in-game map. Optional in every sense: co-op guests
+// have no LocalData.sav, and the reader returns nothing rather than throwing if
+// the format shifts.
+async function readMapPins(w) {
+  try {
+    const res = await fetch(`/api/localdata?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) throw new Error(res.status);
+    customPins = readCustomPins(new Uint8Array(await res.arrayBuffer()));
+  } catch {
+    customPins = [];
+  }
+  placePlayer();
+}
+
 async function selectWorld(i, isAuto = false) {
   const w = worlds[i];
   if (!w) return;
   localStorage.setItem(LS_WORLD, w.id);
   // Hand-ticked progress is per-world, so it loads before the save sync paints.
   await loadManual(w.id);
+  readAutoSaveSpan(w);
+  readMapPins(w);
   try { await syncWorld(w, isAuto); }
   catch (err) { console.error(err); setStatus(err.message, 'err'); }
 }
@@ -664,8 +837,9 @@ const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
 
 // Pre-split each label into a lowercase haystack once, so keystrokes are cheap.
-const searchIndex = markers.map(m => ({ m, hay: m.label.toLowerCase() }));
-const catName = id => (categories.find(c => c.id === id) || {}).name || id;
+// Deliberately spans both maps: searching for a World Tree effigy while looking
+// at Palpagos should find it and take you there, not silently return nothing.
+const searchIndex = allMarkers.map(m => ({ m, hay: m.label.toLowerCase() }));
 
 let searchSel = -1;   // highlighted result for keyboard nav
 
@@ -690,7 +864,8 @@ function renderSearch(q) {
     <li class="search-hit" data-id="${m.id}" data-i="${i}" role="option">
       <span class="dot" style="background:${COLORS[m.category] || '#94a3b8'}"></span>
       <span class="hit-label">${escapeHtml(m.label)}</span>
-      <span class="hit-cat">${escapeHtml(catName(m.category))}</span>
+      <span class="hit-cat">${escapeHtml(catName(m.category)
+      + (mapOf(m) === activeMap ? '' : ` · ${mapOf(m).name}`))}</span>
     </li>`).join('');
   searchResults.hidden = false;
   searchSel = -1;
@@ -706,9 +881,13 @@ function closeSearch() {
 }
 
 function goToMarker(id) {
-  const m = markers.find(x => x.id === id);
+  const m = allMarkers.find(x => x.id === id);
   const pin = pins.get(id);
   if (!m || !pin) return;
+
+  // A hit on the other map is still a hit — switch to it rather than doing
+  // nothing. No fit, because we're about to fly to the marker anyway.
+  if (mapOf(m) !== activeMap) selectMap(mapOf(m), { fit: false });
 
   // The user searched for it, so make sure it's actually on the map even if its
   // category is toggled off or its "found" markers are hidden.
@@ -747,5 +926,15 @@ document.addEventListener('click', e => {
 const profile = localStorage.getItem(LS.profile);
 if (profile) setStatus(`Last synced from ${profile}`);
 
-applyVisibility();
-updateCounts();
+// --- map switcher -----------------------------------------------------------
+const switchEl = document.getElementById('map-switch');
+for (const m of MAPS) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.dataset.map = m.id;
+  btn.textContent = m.name;
+  btn.onclick = () => { if (m !== activeMap) selectMap(m); };
+  switchEl.appendChild(btn);
+}
+
+selectMap(activeMap);

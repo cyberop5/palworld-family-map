@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PalMap — auto-tracking collectible map for Palworld</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="style.css?v=1.3.0">
+<link rel="stylesheet" href="style.css?v=1.4.0">
 <script src="vendor/leaflet.js"></script>
 <script type="importmap">
 { "imports": { "ooz-wasm": "./vendor/ooz-wasm/index.js" } }
@@ -50,6 +50,9 @@
     <button id="sync-btn" class="primary">Sync from save file</button>
     <input type="file" id="sync-input" accept=".sav" hidden>
     <p id="sync-status" class="status"></p>
+    <!-- Filled in from the world's own autoSaveSpan, so "Sync now found
+         nothing" reads as "the game hasn't saved yet" rather than "broken". -->
+    <p id="save-note" class="note save-note" hidden></p>
   </section>
 
   <section class="panel panel-cats">
@@ -62,6 +65,10 @@
       </div>
     </div>
 
+    <!-- Palworld has two maps; the World Tree is its own level with its own
+         texture and coordinates. Buttons are built from the MAPS table. -->
+    <div class="map-switch" id="map-switch" role="group" aria-label="Map"></div>
+
     <ul id="categories"></ul>
 
     <!-- Progressive disclosure: the explanations were three permanent
@@ -73,6 +80,10 @@
         <dd>Ticks itself from your save file.</dd>
         <dt><span class="sync-badge manual">✋</span></dt>
         <dd>Palworld doesn't record these — click a marker to tick it by hand.</dd>
+        <dt>Reference</dt>
+        <dd>Dungeons, treasure maps, warp points, skill fruit and bounties reset or respawn, so
+            there's nothing to complete and no score. Look them up while you play; tick one if you
+            want it greyed out.</dd>
         <dt><span class="key">●</span></dt>
         <dd>Sets what a category does with markers you've found: ● shown,
             ◐ dimmed, ○ hidden. Shift-click sets every category at once.</dd>
@@ -83,13 +94,13 @@
   <footer>
     <p class="note" id="ver">
       <a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>
-      · v1.3.0
+      · v1.4.0
     </p>
   </footer>
 </aside>
 
 <div id="map"></div>
 
-<script type="module" src="app.js?v=1.3.0"></script>
+<script type="module" src="app.js?v=1.4.0"></script>
 </body>
 </html>
