@@ -77,14 +77,50 @@ overrides the save location, `PORT` the port (it walks 5173→5177 if busy).
 ## Coordinates
 
 The map's horizontal axis is world Y (east positive), vertical is world X inverted (north up).
-Bounds were fitted by `tools/calibrate.mjs` — 97.4% of known-on-land markers land on land pixels.
-`diagnose-offset.mjs` then found a residual ~11px westward drift confined to the far-eastern edge
-(invisible on the mainland, obvious on small islands like Arena Entrance); `maxY` is tightened to
-null it there while keeping the rest within ~2px.
+**One** box covers the whole world — Palpagos and both DLC island groups sit in a single continuous
+coordinate space at a single scale.
 
-The marker data is provably exact — converting a fast-travel point's world coords through
-Palworld's in-game map formula (`map_x = (sav_y - 158000)/459`, `map_y = (sav_x + 123888)/459`)
-reproduces the exact coordinate the game shows (e.g. Arena Entrance → 629, 14).
+The box is square on purpose. `T_WorldMap` is a square 8192px texture, so the world region it
+covers must be square too: the same world-units-per-pixel on both axes. The long-standing box
+wasn't — its two axes differed by 0.75%, an error that is ~0 near the middle of the map and grows
+to ~30px out at Feybreak and the Sky Islands. That is the whole bug, and it is why DLC markers sat
+*beside* the thing they marked while Palpagos looked fine.
+
+It was derived by cross-referencing [paldb.cc](https://paldb.cc/en/Palpagos_Islands), which
+publishes the same 8192px artwork as a tile pyramid and lists 867 markers with both their in-game
+coordinates and their position on it. A single uniform-scale affine fits all 867 to under 2px, and
+its two axis scales agree to 0.002% — the square-texture constraint confirmed from an independent
+working implementation rather than assumed.
+
+`tools/calibrate.mjs` no longer fits anything; it **verifies**. Every search-based fit tried here
+produced a confidently wrong answer, so the script's job is to re-check the shipped numbers and
+exit non-zero if they break. It reports per-landmass (so a regression confined to one can't hide in
+a healthy average) and against held-out data, and writes `work/calibration-overlay.png` to judge by
+eye. Current state: 332/332 land-guaranteed markers on land, and 360/360 effigies — which no fit
+has ever looked at.
+
+Three traps worth keeping, each of which produced a good-looking number:
+
+- **The land mask was wrong.** A colour heuristic tuned for Palpagos's greens and browns silently
+  misread Feybreak's dark blue-purple terrain as water, and some open ocean as land, so every score
+  computed against it was meaningless while looking plausible. `isLand()` now tests local texture
+  *variance* — water is a near-flat gradient, every real landmass has grain — which works
+  regardless of palette.
+- **A land-hit score is blind to sub-island drift**, because a marker 40px off is usually still
+  comfortably on the same island. One re-fit of Palpagos scored *higher* (97.9% vs 97.0%) while
+  moving every Palpagos marker by up to 44px. Land-hit can refute a transform; it can't select one.
+- **Per-region boxes were the wrong idea entirely.** They were an attempt to patch, landmass by
+  landmass, the single global scale defect above. Fixing the scale fixed every region at once, and
+  the per-region code is gone.
+
+The marker data is provably exact — converting a world coordinate through Palworld's in-game map
+formula (`map_x = (sav_y - 158000)/459`, `map_y = (sav_x + 123888)/459`) reproduces the exact
+coordinate the game itself shows, in both Palpagos (Arena Entrance → 629, 14) and Sky Islands
+(Azure Covenant Tower → -423, -1426, matched live against a player's own in-game screenshot). This
+formula is unrelated to the per-region pixel-placement fit above — it's the game's own coordinate
+system, not a texture-fit approximation — so it's what marker popups display instead of raw
+save-file units: what a popup shows is directly comparable to what the game or a site like
+paldb.cc shows for the same spot.
 
 ## Rendering performance
 
@@ -143,16 +179,16 @@ on its own. `merge-locations.mjs` needs `--max-old-space-size=6144` (the persist
   World Partition cells — 1427, 649, 849 and 457 cells respectively — so adding them means exporting
   the whole `MainWorld_5` folder. None has a save flag either (they respawn), so they could only
   ever be reference markers. `work/type-cells.json` lists which cells hold what. **Skill fruit** was
-  in this bucket (46 cells) but is now shipped from guide map coordinates instead — see
-  `tools/merge-skillfruit.mjs`. It covers the 17 Palpagos trees only; the DLC-island trees use a
-  different map origin and aren't placed.
+  in this bucket (46 cells) but is now shipped from guide/screenshot map coordinates instead — see
+  `tools/merge-skillfruit.mjs` — covering all 30 trees (19 Palpagos, 7 Feybreak, 4 Sky Islands).
 - **Four newest boss names are descriptive, not Paldeck.** `tools/rename-bosses.mjs` maps 85 of 89
   boss code names to real Paldeck names; PoseidonOrca, RockBeast, ThunderFluffyBird and WhiteDeer
   aren't in any accessible datamine yet, so they keep a cleaned descriptive name until a source
   lists them. A handful of elemental variants show the base species name for the same reason.
-- **Feybreak and Sakurajima markers render off the Palpagos texture.** The map is a single
-  Palpagos image; markers whose world coordinates fall outside it (Feybreak fast-travel points,
-  some bosses) land above the top edge. Fixing it means per-region map textures and transforms.
+- **A couple of tower bosses keep internal placeholder names.** `tools/rename-bosses.mjs` only
+  covers `alphaPal`/`cagedBoss`; `towerBoss` labels come straight from the code name
+  (`PIDF Tower`, whose real in-game name — confirmed against a player screenshot — is "Azure
+  Covenant Tower"). Not yet mapped.
 - **Alpha/Caged bosses match 20 of 27.** The other 7 are *human* bosses (`BOSS_Hunter_Rifle`…)
   which aren't in the Pal spawner tables.
 - The **World Tree** is a separate map with its own texture; its markers are filtered out.

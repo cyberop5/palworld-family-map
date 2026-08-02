@@ -5,11 +5,27 @@ import { parseSave } from './lib/palsave.mjs';
 
 // --- world -> image transform ----------------------------------------------
 // The map's horizontal axis is world Y (east positive) and its vertical axis is
-// world X inverted (north is up). Base bounds fitted by extract/calibrate.mjs
-// (97.4% of known-on-land markers on land). extract/diagnose-offset.mjs then
-// found a residual ~11px westward drift confined to the far-eastern edge; maxY
-// is tightened slightly to null it there while keeping the rest within ~2px.
-const WORLD = { minX: -1094598, maxX: 347730, minY: -726031, maxY: 727133 };
+// world X inverted (north is up). One box for the whole world — Palpagos and
+// both DLC island groups sit in a single continuous coordinate space at a
+// single scale.
+//
+// The box is square on purpose: T_WorldMap is a square 8192px texture, so the
+// world region it covers must be square too — the same world-units-per-pixel
+// on both axes. The long-standing box wasn't: its two axes differed by 0.75%,
+// which is invisible near the middle of the map and grows to ~30px out at
+// Feybreak and the Sky Islands, which is exactly where markers looked "close,
+// but beside the thing rather than on it". That one defect is what an earlier
+// version of this file mistook for three separate regional problems and tried
+// to patch with a box per landmass; there is no such thing, and the
+// per-region code is gone.
+//
+// Derived by cross-referencing paldb.cc's published map, which lists 867
+// markers with both their in-game coordinates and their position on the same
+// 8192px artwork; a single uniform-scale affine fits all 867 to under 2px.
+// Verified independently against our own texture by tools/calibrate.mjs:
+// every one of the 332 land-guaranteed markers lands on land, and so do all
+// 360 effigies — which are pure held-out data, never used in any fit.
+const WORLD = { minX: -1099401, maxX: 349385, minY: -724397, maxY: 724389 };
 const IMAGE = 8192;
 
 function worldToLatLng(wx, wy) {
@@ -17,6 +33,16 @@ function worldToLatLng(wx, wy) {
   const v = 1 - (wx - WORLD.minX) / (WORLD.maxX - WORLD.minX);   // 0..1 north->south
   // CRS.Simple's y grows upward, but v is measured from the top.
   return [(1 - v) * IMAGE, u * IMAGE];
+}
+
+// The in-game map's own coordinate readout — not our pixel-fit transform above.
+// Validated against two known points: Arena Entrance -> 629, 14, and (live, in
+// the Sky Islands DLC area) PIDF/Azure Covenant Tower's raw save coords -778216,
+// -36026 -> -423, -1426, matching the number the pause-menu map shows exactly.
+// Shown in popups instead of raw save units so it's directly comparable to what
+// the player sees in-game or on sites like paldb.cc.
+function toMapCoords(wx, wy) {
+  return [Math.round((wy - 158000) / 459), Math.round((wx + 123888) / 459)];
 }
 
 const COLORS = {
@@ -228,11 +254,12 @@ function pinFor(m) {
 function openPopup(m, marker) {
   const fromSave = auto.has(m.id);
   const found = isFound(m.id);
+  const [mapX, mapY] = toMapCoords(m.x, m.y);
   const el = document.createElement('div');
   el.innerHTML = `
     <div class="popup-title">${escapeHtml(m.label)}</div>
     <div class="popup-meta">
-      ${m.category} &middot; ${m.x}, ${m.y}
+      ${m.category} &middot; ${mapX}, ${mapY}
       ${fromSave ? '<br><span class="src-auto">✓ found — from your save</span>' : ''}
     </div>`;
   if (!fromSave) {
@@ -532,7 +559,7 @@ const stamp = mode => {
   const el = document.getElementById('ver');
   if (el) el.innerHTML =
     `<a class="author" href="https://voidpossum.carrd.co/" target="_blank" rel="noopener">Void Possum</a>`
-    + ` · v1.2.5 · ${escapeHtml(mode)}`;
+    + ` · v1.3.0 · ${escapeHtml(mode)}`;
 };
 
 // Palworld only flushes the save to disk on its own schedule, so hitting
