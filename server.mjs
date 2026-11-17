@@ -1,16 +1,8 @@
 // Tiny static server, plus a strictly read-only local API over the Palworld
-// save folder.
+// save folder and an optional proxy for the Palworld Dedicated Server REST API.
 //
-// Why the API exists: browsers can only re-read a file on their own via the
-// File System Access API, which Brave disables and Firefox never shipped. So
-// the server does the file reading instead and the page polls it. That makes
-// auto-sync work everywhere with no browser flags and no folder picking.
-//
-// It is deliberately narrow: bound to 127.0.0.1 (never reachable from the
-// network), it only ever reads, and every path it opens is forced to stay
-// inside the save folder.
-//
-// © Void Possum
+// Zero runtime dependencies — Node's standard library only.
+// Based on PalMap (© Void Possum, GPL-3.0).
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -18,19 +10,22 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// Deliberately zero dependencies — Node's standard library only. The browser
-// already carries a copy of the Oodle decompressor for reading player saves, so
-// letting it decode LevelMeta.sav too means this server needs nothing installed.
-// That's what turns setup into "double-click the launcher" with no npm install.
-
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
-// PAL_SAVES overrides for non-standard installs (or for testing).
+// PAL_SAVES overrides for non-standard installs or Docker volume mounts.
 const SAVES = process.env.PAL_SAVES
   ? path.resolve(process.env.PAL_SAVES)
   : process.env.LOCALAPPDATA
     ? path.resolve(process.env.LOCALAPPDATA, 'Pal/Saved/SaveGames')
     : null;
+
+// DATA_DIR holds runtime state (progress.json, players-cache.json).
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : ROOT;
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// Optional Palworld Dedicated Server REST API config (server-side only; never exposed to browser).
+const PALWORLD_API_BASE_URL = (process.env.PALWORLD_API_BASE_URL || '').replace(/\/+$/, '');
+const PALWORLD_ADMIN_PASSWORD = process.env.PALWORLD_ADMIN_PASSWORD || '';
 
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
@@ -44,20 +39,23 @@ const dirsIn = p => {
   catch { return []; }
 };
 
-// The local single-player host always occupies this slot; co-op guests get hex
-// names and *_dps files are differential backups, which we skip.
 const HOST_SLOT = '00000000000000000000000000000001.sav';
-function pickPlayer(worldDir) {
+const PLAYER_UID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function listPlayerFiles(worldDir) {
   let files;
   try { files = fs.readdirSync(path.join(worldDir, 'Players')); }
-  catch { return null; }
-  files = files.filter(n => n.toLowerCase().endsWith('.sav') && !n.toLowerCase().includes('_dps'));
-  return files.find(n => n === HOST_SLOT) || files[0] || null;
+  catch { return []; }
+  return files
+    .filter(n => n.toLowerCase().endsWith('.sav') && !n.toLowerCase().includes('_dps'))
+    .sort((a, b) => (a === HOST_SLOT ? -1 : b === HOST_SLOT ? 1 : a.localeCompare(b)));
 }
 
-// SaveGames/<SteamID>/<WorldID>/{LevelMeta.sav, Players/*.sav}
-// Names are not resolved here — the page fetches /api/meta and decodes
-// LevelMeta.sav itself, which is what keeps this file dependency-free.
+function pickPlayer(worldDir) {
+  const files = listPlayerFiles(worldDir);
+  return files[0] || null;
+}
+
 function listWorlds() {
   if (!SAVES || !fs.existsSync(SAVES)) return [];
   const out = [];
@@ -73,9 +71,6 @@ function listWorlds() {
   return out;
 }
 
-// The id shape is validated first (so it cannot contain separators or ".."),
-// then every resolved path is re-checked against the save root — belt and
-// braces against path traversal.
 function worldDir(worldId) {
   if (!SAVES || typeof worldId !== 'string') return null;
   if (!/^[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(worldId)) return null;
@@ -86,18 +81,20 @@ function worldDir(worldId) {
 
 const inSaves = file => (file.startsWith(SAVES + path.sep) && fs.existsSync(file) ? file : null);
 
-function playerSavePath(worldId) {
+function playerSavePath(worldId, playerUid = null) {
   const dir = worldDir(worldId);
   if (!dir) return null;
+  if (playerUid) {
+    if (!PLAYER_UID_RE.test(playerUid)) return null;
+    const target = `${playerUid}.sav`;
+    const files = listPlayerFiles(dir);
+    const match = files.find(f => f.toLowerCase() === target.toLowerCase());
+    return match ? inSaves(path.resolve(dir, 'Players', match)) : null;
+  }
   const player = pickPlayer(dir);
   return player ? inSaves(path.resolve(dir, 'Players', player)) : null;
 }
 
-// LevelMeta.sav names the world; WorldOption.sav carries the server settings,
-// including how often the game autosaves; LocalData.sav holds the pins the
-// player dropped on the in-game map. All three are handed over as raw bytes and
-// decoded in the page, same as the player save — that's what keeps this file
-// free of any save-parsing dependency.
 const WORLD_FILES = {
   meta: 'LevelMeta.sav',
   worldoption: 'WorldOption.sav',
@@ -110,30 +107,127 @@ function worldFilePath(worldId, which) {
   return dir && name ? inSaves(path.resolve(dir, name)) : null;
 }
 
-// --- hand-ticked progress ---------------------------------------------------
-// Categories like dungeons and treasure maps aren't recorded in the Palworld
-// save at all, so browser localStorage was their only home — clearing site data
-// wiped them. Keeping them in a file next to the server fixes that, and means
-// the same ticks appear in every browser on the machine.
-//
-// This is the *only* thing PalMap ever writes, and it writes to its own file.
-// Nothing here can touch a Palworld save: the path is a fixed constant, never
-// derived from the request.
-const PROGRESS_FILE = path.join(ROOT, 'progress.json');
-const MAX_BODY = 2 * 1024 * 1024;
-const WORLD_KEY = /^[A-Za-z0-9_\-/]{1,128}$/;
+async function readFileWithRetry(filePath, retries = 1) {
+  try {
+    return await fs.promises.readFile(filePath);
+  } catch (err) {
+    if (retries > 0 && (err.code === 'EBUSY' || err.code === 'EAGAIN')) {
+      await new Promise(r => setTimeout(r, 100));
+      return readFileWithRetry(filePath, retries - 1);
+    }
+    throw err;
+  }
+}
 
-const readProgress = () => {
-  try { return JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')); }
-  catch { return {}; }
+// --- runtime state (progress + player name cache) ---------------------------
+const PROGRESS_FILE = path.join(DATA_DIR, 'progress.json');
+const PLAYERS_CACHE_FILE = path.join(DATA_DIR, 'players-cache.json');
+const MAX_BODY = 2 * 1024 * 1024;
+const WORLD_KEY = /^[A-Za-z0-9_\-/:]{1,192}$/;
+
+const readJsonFile = (file, fallback) => {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch { return fallback; }
 };
 
-function writeProgress(all) {
-  // Write-then-rename: a crash mid-write leaves the old file intact rather than
-  // a truncated one.
-  const tmp = `${PROGRESS_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(all, null, 2));
-  fs.renameSync(tmp, PROGRESS_FILE);
+function writeJsonAtomic(file, obj) {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+const readProgress = () => readJsonFile(PROGRESS_FILE, {});
+const writeProgress = all => writeJsonAtomic(PROGRESS_FILE, all);
+
+// Maps normalized playerId / uid prefixes to { name, playerId, userId, lastSeen }.
+const readPlayersCache = () => readJsonFile(PLAYERS_CACHE_FILE, {});
+function updatePlayersCache(livePlayers) {
+  if (!Array.isArray(livePlayers) || livePlayers.length === 0) return;
+  const cache = readPlayersCache();
+  let changed = false;
+  for (const p of livePlayers) {
+    if (!p?.name || !p?.playerId) continue;
+    const key = String(p.playerId).toLowerCase();
+    const prev = cache[key];
+    if (!prev || prev.name !== p.name || prev.userId !== p.userId) {
+      cache[key] = {
+        name: p.name,
+        playerId: String(p.playerId),
+        userId: p.userId ? String(p.userId) : null,
+        lastSeen: new Date().toISOString(),
+      };
+      changed = true;
+    }
+  }
+  if (changed) writeJsonAtomic(PLAYERS_CACHE_FILE, cache);
+}
+
+function resolveCachedPlayerName(uid, cache) {
+  const lower = uid.toLowerCase();
+  if (cache[lower]?.name) return cache[lower].name;
+  // Palworld REST API playerId is often an 8-char hex prefix or unpadded hex of the 32-char GUID.
+  for (const [k, v] of Object.entries(cache)) {
+    if (!v?.name) continue;
+    if (lower.startsWith(k) || k.startsWith(lower)) return v.name;
+    const trimmedUid = lower.replace(/^0+/, '');
+    const trimmedKey = k.replace(/^0+/, '');
+    if (trimmedKey && trimmedUid && (trimmedUid.startsWith(trimmedKey) || trimmedKey.startsWith(trimmedUid))) {
+      return v.name;
+    }
+  }
+  return null;
+}
+
+// --- live players REST API proxy --------------------------------------------
+const LIVE_CACHE_MS = 2000;
+let liveCache = { at: 0, payload: null };
+
+async function fetchLivePlayers() {
+  if (!PALWORLD_API_BASE_URL || !PALWORLD_ADMIN_PASSWORD) {
+    return { configured: false, serverOnline: false, players: [], updatedAt: null };
+  }
+  const now = Date.now();
+  if (liveCache.payload && now - liveCache.at < LIVE_CACHE_MS) {
+    return liveCache.payload;
+  }
+
+  const auth = Buffer.from(`admin:${PALWORLD_ADMIN_PASSWORD}`).toString('base64');
+  let payload;
+  try {
+    const res = await fetch(`${PALWORLD_API_BASE_URL}/v1/api/players`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) {
+      throw new Error(`REST API returned HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const players = Array.isArray(data?.players)
+      ? data.players.map(p => ({
+        name: p.name || 'Unknown',
+        playerId: p.playerId != null ? String(p.playerId) : '',
+        userId: p.userId != null ? String(p.userId) : '',
+        location_x: Number(p.location_x),
+        location_y: Number(p.location_y),
+        level: Number(p.level) || 0,
+        ping: Number(p.ping) || 0,
+      })).filter(p => Number.isFinite(p.location_x) && Number.isFinite(p.location_y))
+      : [];
+
+    updatePlayersCache(players);
+    payload = { configured: true, serverOnline: true, players, updatedAt: new Date().toISOString() };
+  } catch (err) {
+    payload = {
+      configured: true,
+      serverOnline: false,
+      players: [],
+      error: err?.message || 'Unable to reach Palworld server',
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  liveCache = { at: now, payload };
+  return payload;
 }
 
 // --- request handling -------------------------------------------------------
@@ -142,12 +236,12 @@ const sendJson = (res, obj) => {
   res.end(JSON.stringify(obj));
 };
 
-function handler(req, res) {
+async function handler(req, res) {
   const [rawPath, rawQuery] = req.url.split('?');
   const url = decodeURIComponent(rawPath);
   const params = new URLSearchParams(rawQuery || '');
 
-  // ---- hand-ticked progress (the only writable endpoint) ----
+  // ---- hand-ticked progress (writable endpoint) ----
   if (url === '/api/progress') {
     const world = params.get('world') || 'default';
     if (!WORLD_KEY.test(world)) { res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad world key'); return; }
@@ -183,44 +277,72 @@ function handler(req, res) {
     return;
   }
 
+  // ---- live player positions (REST API proxy) ----
+  if (url === '/api/live-players') {
+    const data = await fetchLivePlayers();
+    sendJson(res, data);
+    return;
+  }
+
   // ---- read-only save API ----
   if (url === '/api/worlds') { sendJson(res, listWorlds()); return; }
 
-  // Raw world-level saves — the page decodes them. LocalData.sav is optional
-  // (co-op guests don't have one), so a 404 here is not an error worth shouting
-  // about; the page just shows no in-game pins.
+  if (url === '/api/players') {
+    const dir = worldDir(params.get('world'));
+    if (!dir) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
+    const cache = readPlayersCache();
+    const files = listPlayerFiles(dir);
+    const players = files.map(filename => {
+      const uid = filename.replace(/\.sav$/i, '');
+      const fullPath = path.join(dir, 'Players', filename);
+      let mtime = 0;
+      try { mtime = fs.statSync(fullPath).mtimeMs; } catch {}
+      const cachedName = resolveCachedPlayerName(uid, cache);
+      const isHost = filename === HOST_SLOT;
+      const fallbackLabel = isHost ? 'Host (0001)' : `Player (${uid.slice(0, 8)})`;
+      return {
+        uid,
+        filename,
+        name: cachedName || fallbackLabel,
+        hasKnownName: Boolean(cachedName),
+        isHost,
+        mtime,
+      };
+    });
+    sendJson(res, { players });
+    return;
+  }
+
   const which = url === '/api/meta' ? 'meta'
     : url === '/api/worldoption' ? 'worldoption'
       : url === '/api/localdata' ? 'localdata' : null;
   if (which) {
     const file = worldFilePath(params.get('world'), which);
     if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
+    const bytes = await readFileWithRetry(file);
     res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
-    res.end(fs.readFileSync(file));
+    res.end(bytes);
     return;
   }
 
   if (url === '/api/status' || url === '/api/save') {
-    const file = playerSavePath(params.get('world'));
+    const file = playerSavePath(params.get('world'), params.get('player'));
     if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such save'); return; }
     const mtime = fs.statSync(file).mtimeMs;
 
-    // /api/status is the cheap poll — a stat, no decompression — so the page
-    // only downloads and re-parses the save when it has actually changed.
     if (url === '/api/status') { sendJson(res, { mtime }); return; }
 
+    const bytes = await readFileWithRetry(file);
     res.writeHead(200, {
       'Content-Type': 'application/octet-stream',
       'Cache-Control': 'no-store',
       'X-Save-Mtime': String(mtime),
     });
-    res.end(fs.readFileSync(file));
+    res.end(bytes);
     return;
   }
 
   // ---- static files ----
-  // Redirect rather than serving app/index.html at "/", so the page's relative
-  // URLs (style.css, vendor/…, data/…) resolve against /app/.
   if (url === '/') { res.writeHead(302, { Location: '/app/' }).end(); return; }
 
   let file = path.join(ROOT, url);
@@ -236,15 +358,18 @@ function handler(req, res) {
 }
 
 // --- listen -----------------------------------------------------------------
-// Without an error handler an occupied port kills the process with a raw
-// EADDRINUSE stack trace, which tells a non-technical user nothing. Try a few
-// ports, then explain the fix in plain English.
+const HOST = process.env.HOST || '127.0.0.1';
 const BASE = Number(process.env.PORT) || 5173;
-const PORTS = [BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4];
+const PORTS = process.env.PORT ? [BASE] : [BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4];
 
 function listen(i = 0) {
   const port = PORTS[i];
-  const server = http.createServer(handler);
+  const server = http.createServer((req, res) => {
+    handler(req, res).catch(err => {
+      console.error('Request error:', err);
+      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Internal error');
+    });
+  });
 
   server.on('error', err => {
     if (err.code !== 'EADDRINUSE') {
@@ -256,24 +381,20 @@ function listen(i = 0) {
       listen(i + 1);
       return;
     }
-    console.error(
-      `\nPalMap could not start: ports ${PORTS[0]}-${PORTS[PORTS.length - 1]} are all in use.\n` +
-      `Close whatever is using them, or pick your own port:\n\n` +
-      `    PORT=8080 npm start\n`
-    );
+    console.error(`\nPalMap could not start: port ${port} is in use.\n`);
     process.exit(1);
   });
 
-  // 127.0.0.1 only: the save API must never be reachable from the network.
-  server.listen(port, '127.0.0.1', () => {
-    const url = `http://localhost:${port}/app/`;
-    console.log(`\nPalMap running at  ${url}`);
+  server.listen(port, HOST, () => {
+    const url = `http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${port}/app/`;
+    console.log(`\nPalworld Family Map running at ${url} (bound ${HOST}:${port})`);
     console.log(SAVES && fs.existsSync(SAVES)
       ? `Reading saves from ${SAVES}`
-      : `No Palworld save folder found${SAVES ? ` at ${SAVES}` : ''} — set PAL_SAVES, or use the manual file picker in the page.`);
+      : `No Palworld save folder found${SAVES ? ` at ${SAVES}` : ''} — set PAL_SAVES.`);
+    console.log(PALWORLD_API_BASE_URL
+      ? `Live player REST API: ${PALWORLD_API_BASE_URL}`
+      : `Live player REST API disabled (PALWORLD_API_BASE_URL not set).`);
 
-    // The launcher sets PALMAP_OPEN so the browser lands on the port we
-    // actually got — the launcher can't know that in advance if 5173 was busy.
     if (process.env.PALMAP_OPEN) {
       const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
         : process.platform === 'darwin' ? ['open', [url]]

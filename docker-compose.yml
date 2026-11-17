@@ -1,0 +1,17 @@
+services:
+  palworld-family-map:
+    build: .
+    container_name: palworld-family-map
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8225}:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - PAL_SAVES=/palworld/Pal/Saved/SaveGames
+      - DATA_DIR=/data
+      - PALWORLD_API_BASE_URL=${PALWORLD_API_BASE_URL:-http://palworld-server:8212}
+      - PALWORLD_ADMIN_PASSWORD=${PALWORLD_ADMIN_PASSWORD:-}
+    volumes:
+      - ${PALWORLD_DATA_DIR:-./sample-saves}:/palworld:ro
+      - ./data:/data

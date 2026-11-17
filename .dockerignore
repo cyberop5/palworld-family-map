@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+node_modules
+work
+raw
+docs
+tools
+progress.json
+players-cache.json
+data
+Start PalMap.bat

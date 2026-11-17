@@ -33,6 +33,11 @@
       <select id="world-select"></select>
     </label>
 
+    <label class="field" id="player-field" hidden>
+      <span class="field-label">Player</span>
+      <select id="player-select"></select>
+    </label>
+
     <div class="save-bar" id="sync-actions" hidden>
       <button id="refresh-btn" class="ghost" title="Re-read the save file now">↻ Sync now</button>
       <label class="auto-row" id="auto-row" hidden title="Re-reads the save on a timer and updates automatically">
@@ -45,6 +50,14 @@
           <option value="10">10m</option>
         </select>
       </label>
+    </div>
+
+    <div class="live-bar" id="live-bar" hidden>
+      <label class="auto-row" title="Show live player positions from the dedicated server REST API">
+        <input type="checkbox" id="live-toggle" checked>
+        <span>Live players</span>
+      </label>
+      <span id="live-status" class="live-status"></span>
     </div>
 
     <button id="sync-btn" class="primary">Sync from save file</button>

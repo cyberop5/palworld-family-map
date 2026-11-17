@@ -385,15 +385,47 @@ function livePin(pos, html, size, popup) {
 const YOU_PIN = `<div class="you-pin">
   <img src="data/icons/ui/T_SignBoard_Icon_Cattiva_Pleading.png" alt="" decoding="async"></div>`;
 
+const PLAYER_COLORS = ['#38bdf8', '#f472b6', '#4ade80', '#facc15', '#c084fc', '#fb923c'];
+const livePlayersLayer = L.layerGroup().addTo(map);
+let livePlayers = [];
+let showLivePlayers = true;
+
+function placeLivePlayers() {
+  livePlayersLayer.clearLayers();
+  if (!showLivePlayers || !Array.isArray(livePlayers)) return;
+  livePlayers.forEach((p, idx) => {
+    const pos = { x: p.location_x, y: p.location_y };
+    if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
+    if (mapOf(pos) !== activeMap) return;
+    const color = PLAYER_COLORS[idx % PLAYER_COLORS.length];
+    const html = `<div class="live-player-pin" style="--player-color:${color}">
+      <div class="live-player-dot"></div>
+      <div class="live-player-label">${escapeHtml(p.name)}</div>
+    </div>`;
+    const pin = L.marker(worldToLatLng(pos.x, pos.y, activeMap), {
+      icon: L.divIcon({ className: '', html, iconSize: [0, 0], iconAnchor: [0, 0] }),
+      keyboard: false,
+      zIndexOffset: 1100,
+    });
+    const [mx, my] = toMapCoords(pos.x, pos.y, activeMap);
+    pin.bindPopup(
+      `<div class="popup-title">${escapeHtml(p.name)} (Lv ${p.level})</div>` +
+      `<div class="popup-meta">${mx}, ${my}</div>`
+    );
+    livePlayersLayer.addLayer(pin);
+  });
+}
+
 function placePlayer() {
   liveLayer.clearLayers();
   if (playerPos && mapOf(playerPos) === activeMap) {
-    liveLayer.addLayer(livePin(playerPos, YOU_PIN, 30, 'You are here'));
+    liveLayer.addLayer(livePin(playerPos, YOU_PIN, 30, 'Last saved position'));
   }
   for (const p of customPins) {
     if (mapOf(p) !== activeMap) continue;
     liveLayer.addLayer(livePin(p, '<div class="custom-pin"></div>', 16, 'Your map pin'));
   }
+  placeLivePlayers();
 }
 
 // --- visibility -------------------------------------------------------------
@@ -668,21 +700,30 @@ document.getElementById('sync-input').onchange = async e => {
 const els = {
   worldField: document.getElementById('world-field'),
   worldSelect: document.getElementById('world-select'),
+  playerField: document.getElementById('player-field'),
+  playerSelect: document.getElementById('player-select'),
   syncActions: document.getElementById('sync-actions'),
   refreshBtn: document.getElementById('refresh-btn'),
   autoRow: document.getElementById('auto-row'),
   autoToggle: document.getElementById('auto-toggle'),
   autoInterval: document.getElementById('auto-interval'),
+  liveBar: document.getElementById('live-bar'),
+  liveToggle: document.getElementById('live-toggle'),
+  liveStatus: document.getElementById('live-status'),
   syncBtn: document.getElementById('sync-btn'),
 };
 
 const LS_WORLD = 'palmap.worldId';
+const LS_PLAYER = 'palmap.playerUid';
 const LS_AUTO_ON = 'palmap.autoOn';
 const LS_AUTO_MINS = 'palmap.autoMins';
+const LS_LIVE_ON = 'palmap.liveOn';
 
 let worlds = [];
+let players = [];
 let lastMtime = null;
 let autoTimer = null;
+let liveTimer = null;
 
 const currentWorld = () => worlds[Number(els.worldSelect.value)] || null;
 const worldLabel = w =>
@@ -770,19 +811,21 @@ async function checkForUpdate({ force = false } = {}) {
 }
 
 document.getElementById('update-check-btn').onclick = () => checkForUpdate({ force: true });
-checkForUpdate();
 
-// Palworld only flushes the save to disk on its own schedule, so hitting
-// Refresh right after picking something up legitimately finds nothing new.
-// Reporting the save's own write time is what tells the two cases apart —
-// without it "nothing changed" is indistinguishable from "the button is broken".
-async function syncWorld(w, isAuto = false) {
-  const res = await fetch(`/api/save?world=${encodeURIComponent(w.id)}`);
+const currentPlayerUid = () => els.playerSelect?.value || '';
+const progressScopeKey = (w, uid) => (uid ? `${w.id}:${uid}` : w.id);
+
+async function syncWorld(w, playerUid = currentPlayerUid(), isAuto = false) {
+  const q = new URLSearchParams({ world: w.id });
+  if (playerUid) q.set('player', playerUid);
+  const res = await fetch(`/api/save?${q}`);
   if (!res.ok) throw new Error(`Could not read the save (${res.status})`);
 
   const mtime = Number(res.headers.get('X-Save-Mtime'));
   const before = auto.size;
-  const matched = syncFromBytes(new Uint8Array(await res.arrayBuffer()), w.name);
+  const playerObj = players.find(p => p.uid === playerUid);
+  const label = playerObj ? `${w.name} (${playerObj.name})` : w.name;
+  const matched = syncFromBytes(new Uint8Array(await res.arrayBuffer()), label);
   const gained = auto.size - before;
   lastMtime = mtime;
 
@@ -832,32 +875,114 @@ async function readMapPins(w) {
   placePlayer();
 }
 
+function renderPlayerOptions(selectedUid) {
+  els.playerSelect.innerHTML = '';
+  for (const p of players) {
+    const o = document.createElement('option');
+    o.value = p.uid;
+    o.textContent = p.name;
+    els.playerSelect.appendChild(o);
+  }
+  if (selectedUid && players.some(p => p.uid === selectedUid)) {
+    els.playerSelect.value = selectedUid;
+  } else if (players.length > 0) {
+    els.playerSelect.value = players[0].uid;
+  }
+  els.playerField.hidden = players.length === 0;
+}
+
+async function loadPlayersForWorld(w) {
+  try {
+    const res = await fetch(`/api/players?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    players = Array.isArray(data.players) ? data.players : [];
+  } catch {
+    players = [];
+  }
+  const remembered = localStorage.getItem(LS_PLAYER);
+  renderPlayerOptions(remembered);
+}
+
+async function selectPlayer(uid, isAuto = false) {
+  const w = currentWorld();
+  if (!w) return;
+  if (uid) localStorage.setItem(LS_PLAYER, uid);
+  await loadManual(progressScopeKey(w, uid));
+  try { await syncWorld(w, uid, isAuto); }
+  catch (err) { console.error(err); setStatus(err.message, 'err'); }
+}
+
 async function selectWorld(i, isAuto = false) {
   const w = worlds[i];
   if (!w) return;
   localStorage.setItem(LS_WORLD, w.id);
-  // Hand-ticked progress is per-world, so it loads before the save sync paints.
-  await loadManual(w.id);
   readAutoSaveSpan(w);
   readMapPins(w);
-  try { await syncWorld(w, isAuto); }
-  catch (err) { console.error(err); setStatus(err.message, 'err'); }
+  await loadPlayersForWorld(w);
+  await selectPlayer(currentPlayerUid(), isAuto);
 }
 
-// The poll hits /api/status, which is a stat rather than a save parse, so
-// running it every minute costs nothing; the save is only re-read once its
-// timestamp actually moves.
 async function autoTick() {
   const w = currentWorld();
   if (!w) return;
+  const uid = currentPlayerUid();
   try {
-    const res = await fetch(`/api/status?world=${encodeURIComponent(w.id)}`);
+    const q = new URLSearchParams({ world: w.id });
+    if (uid) q.set('player', uid);
+    const res = await fetch(`/api/status?${q}`);
     if (!res.ok) return;
     const { mtime } = await res.json();
     if (String(mtime) === String(lastMtime)) return;
-    await syncWorld(w, true);
+    await syncWorld(w, uid, true);
   } catch (err) {
     console.error(err);
+  }
+}
+
+async function pollLivePlayers() {
+  try {
+    const res = await fetch('/api/live-players');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.configured) {
+      els.liveBar.hidden = true;
+      return;
+    }
+    els.liveBar.hidden = false;
+    if (data.serverOnline) {
+      livePlayers = data.players || [];
+      els.liveStatus.textContent = `${livePlayers.length} online`;
+      els.liveStatus.className = 'live-status online';
+      // Refresh player dropdown names if any previously unknown UID just came online.
+      const w = currentWorld();
+      if (w && players.some(p => !p.hasKnownName)) {
+        const prev = currentPlayerUid();
+        await loadPlayersForWorld(w);
+        if (prev) els.playerSelect.value = prev;
+      }
+    } else {
+      livePlayers = [];
+      els.liveStatus.textContent = 'Server offline';
+      els.liveStatus.className = 'live-status offline';
+    }
+    placeLivePlayers();
+  } catch {
+    // Silent on transient network errors.
+  }
+}
+
+function setupLivePolling() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  showLivePlayers = els.liveToggle.checked;
+  localStorage.setItem(LS_LIVE_ON, showLivePlayers ? '1' : '0');
+  placeLivePlayers();
+  if (showLivePlayers) {
+    pollLivePlayers();
+    liveTimer = setInterval(pollLivePlayers, 3000);
+  } else {
+    els.liveStatus.textContent = 'Paused';
+    els.liveStatus.className = 'live-status';
   }
 }
 
@@ -889,21 +1014,25 @@ fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
   els.syncBtn.classList.remove('primary');
   els.syncBtn.classList.add('link', 'plain');
   els.syncBtn.textContent = 'Or pick a .sav file manually…';
-  stamp('auto-sync');
+  stamp('family server');
 
   els.autoToggle.checked = (localStorage.getItem(LS_AUTO_ON) ?? '1') === '1';
   els.autoInterval.value = localStorage.getItem(LS_AUTO_MINS) || '1';
+  els.liveToggle.checked = (localStorage.getItem(LS_LIVE_ON) ?? '1') === '1';
 
   els.worldSelect.onchange = () => selectWorld(Number(els.worldSelect.value));
-  els.refreshBtn.onclick = () => selectWorld(Number(els.worldSelect.value));
+  els.playerSelect.onchange = () => selectPlayer(currentPlayerUid());
+  els.refreshBtn.onclick = () => selectPlayer(currentPlayerUid());
   els.autoToggle.onchange = setupAuto;
   els.autoInterval.onchange = setupAuto;
+  els.liveToggle.onchange = setupLivePolling;
 
   const remembered = localStorage.getItem(LS_WORLD);
   const i = Math.max(0, worlds.findIndex(w => w.id === remembered));
   els.worldSelect.value = String(i);
   await selectWorld(i);
   setupAuto();
+  setupLivePolling();
 }).catch(err => { console.error(err); stamp('file mode'); });
 
 

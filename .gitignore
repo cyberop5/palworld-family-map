@@ -1,8 +1,16 @@
 node_modules/
 work/
 
-# Manual progress, written by the local server at runtime.
+# Manual progress and runtime state, written by the server at runtime.
 progress.json
+players-cache.json
+data/
+*.tmp
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
 
 # FModel and its raw game-file exports — huge, and regenerable. The finished
 # assets under app/data/ (map, markers, icons) ARE committed; see README.
