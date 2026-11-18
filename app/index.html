@@ -122,6 +122,41 @@
   </footer>
 </aside>
 
+<aside id="family-sidebar" class="family-sidebar" hidden aria-label="Family Stats">
+  <header class="family-header">
+    <div class="family-title-row">
+      <h2>Family Stats</h2>
+      <span id="world-day-badge" class="day-badge" hidden></span>
+    </div>
+    <button id="family-collapse-btn" class="ghost icon-btn" type="button" title="Collapse Family Stats" aria-expanded="true">−</button>
+  </header>
+  <div id="family-body" class="family-body">
+    <section class="panel family-section">
+      <div class="section-head">
+        <h3>Party Power</h3>
+        <span class="note">Lv + Party Pals</span>
+      </div>
+      <ul id="party-power-list" class="stat-list"></ul>
+    </section>
+
+    <section class="panel family-section">
+      <div class="section-head">
+        <h3>Paldeck</h3>
+        <span class="note">Unique / Caught</span>
+      </div>
+      <ul id="paldeck-list" class="stat-list"></ul>
+    </section>
+
+    <section class="panel family-section">
+      <div class="section-head">
+        <h3>Bases &amp; Expeditions</h3>
+      </div>
+      <div id="base-workers-list" class="base-list"></div>
+      <p id="expedition-note" class="note expedition-note"></p>
+    </section>
+  </div>
+</aside>
+
 <div id="map"></div>
 
 <script type="module" src="app.js?v=1.5.0"></script>

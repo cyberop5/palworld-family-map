@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildFamilyStats } from './app/lib/levelstats.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +27,8 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 // Optional Palworld Dedicated Server REST API config (server-side only; never exposed to browser).
 const PALWORLD_API_BASE_URL = (process.env.PALWORLD_API_BASE_URL || '').replace(/\/+$/, '');
 const PALWORLD_ADMIN_PASSWORD = process.env.PALWORLD_ADMIN_PASSWORD || '';
+// Optional Palworld Bedtime Warden API URL for historical playerId -> name mapping.
+const BEDTIME_WARDEN_URL = (process.env.BEDTIME_WARDEN_URL || '').replace(/\/+$/, '');
 
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
@@ -148,6 +151,7 @@ function updatePlayersCache(livePlayers) {
   for (const p of livePlayers) {
     if (!p?.name || !p?.playerId) continue;
     const key = String(p.playerId).toLowerCase();
+    if (key === 'none') continue;
     const prev = cache[key];
     if (!prev || prev.name !== p.name || prev.userId !== p.userId) {
       cache[key] = {
@@ -181,6 +185,36 @@ function resolveCachedPlayerName(uid, cache) {
 // --- live players REST API proxy --------------------------------------------
 const LIVE_CACHE_MS = 2000;
 let liveCache = { at: 0, payload: null };
+const familyStatsCache = new Map();
+
+const WARDEN_SYNC_MS = 30000;
+let lastWardenSyncAt = 0;
+
+async function syncFromBedtimeWarden() {
+  if (!BEDTIME_WARDEN_URL) return;
+  const now = Date.now();
+  if (now - lastWardenSyncAt < WARDEN_SYNC_MS) return;
+  lastWardenSyncAt = now;
+  try {
+    const res = await fetch(`${BEDTIME_WARDEN_URL}/api/history`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return;
+    const history = await res.json();
+    const list = Array.isArray(history) ? history : Array.isArray(history?.value) ? history.value : [];
+    const mapped = list
+      .filter(h => h?.currentName && h?.playerId && String(h.playerId).toLowerCase() !== 'none')
+      .map(h => ({
+        name: String(h.currentName),
+        playerId: String(h.playerId),
+        userId: h.userId ? String(h.userId) : '',
+      }));
+    updatePlayersCache(mapped);
+  } catch {
+    // Bedtime Warden is optional; ignore transient errors.
+  }
+}
 
 async function fetchLivePlayers() {
   if (!PALWORLD_API_BASE_URL || !PALWORLD_ADMIN_PASSWORD) {
@@ -290,6 +324,7 @@ async function handler(req, res) {
   if (url === '/api/players') {
     const dir = worldDir(params.get('world'));
     if (!dir) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
+    await syncFromBedtimeWarden();
     const cache = readPlayersCache();
     const files = listPlayerFiles(dir);
     const players = files.map(filename => {
@@ -310,6 +345,33 @@ async function handler(req, res) {
       };
     });
     sendJson(res, { players });
+    return;
+  }
+
+  if (url === '/api/family-stats') {
+    const worldId = params.get('world');
+    const dir = worldDir(worldId);
+    if (!dir) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('No such world'); return; }
+    await syncFromBedtimeWarden();
+    const cache = readPlayersCache();
+    const files = listPlayerFiles(dir);
+    const stampParts = [
+      ...['Level.sav', 'LevelMeta.sav'].map(f => {
+        try { return `${f}:${fs.statSync(path.join(dir, f)).mtimeMs}`; } catch { return `${f}:0`; }
+      }),
+      ...files.map(f => {
+        try { return `${f}:${fs.statSync(path.join(dir, 'Players', f)).mtimeMs}`; } catch { return `${f}:0`; }
+      }),
+    ];
+    const mtimeKey = stampParts.join('|');
+    const cached = familyStatsCache.get(worldId);
+    if (cached && cached.mtimeKey === mtimeKey) {
+      sendJson(res, cached.data);
+      return;
+    }
+    const data = buildFamilyStats(dir, files, uid => resolveCachedPlayerName(uid, cache));
+    familyStatsCache.set(worldId, { mtimeKey, data });
+    sendJson(res, data);
     return;
   }
 

@@ -919,6 +919,7 @@ async function selectWorld(i, isAuto = false) {
   localStorage.setItem(LS_WORLD, w.id);
   readAutoSaveSpan(w);
   readMapPins(w);
+  loadFamilyStats(w);
   await loadPlayersForWorld(w);
   await selectPlayer(currentPlayerUid(), isAuto);
 }
@@ -935,9 +936,29 @@ async function autoTick() {
     const { mtime } = await res.json();
     if (String(mtime) === String(lastMtime)) return;
     await syncWorld(w, uid, true);
+    loadFamilyStats(w);
   } catch (err) {
     console.error(err);
   }
+}
+
+const LIVE_POLL_ACTIVE_MS = 3000;
+const LIVE_POLL_IDLE_MS = 15000;
+const LIVE_POLL_OFFLINE_MS = 30000;
+const AUTO_IDLE_MS = 10 * 60000;
+
+let liveConfigured = false;
+let liveServerOnline = false;
+
+function scheduleNextLivePoll() {
+  if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+  if (!showLivePlayers) return;
+  const delay = !liveServerOnline
+    ? LIVE_POLL_OFFLINE_MS
+    : livePlayers.length > 0
+      ? LIVE_POLL_ACTIVE_MS
+      : LIVE_POLL_IDLE_MS;
+  liveTimer = setTimeout(pollLivePlayers, delay);
 }
 
 async function pollLivePlayers() {
@@ -945,11 +966,14 @@ async function pollLivePlayers() {
     const res = await fetch('/api/live-players');
     if (!res.ok) return;
     const data = await res.json();
+    liveConfigured = Boolean(data.configured);
     if (!data.configured) {
       els.liveBar.hidden = true;
       return;
     }
     els.liveBar.hidden = false;
+    const hadPlayers = livePlayers.length > 0;
+    liveServerOnline = Boolean(data.serverOnline);
     if (data.serverOnline) {
       livePlayers = data.players || [];
       els.liveStatus.textContent = `${livePlayers.length} online`;
@@ -967,19 +991,27 @@ async function pollLivePlayers() {
       els.liveStatus.className = 'live-status offline';
     }
     placeLivePlayers();
+
+    // Adjust save-file auto-sync cadence when player presence changes.
+    const hasPlayers = livePlayers.length > 0;
+    if (hasPlayers !== hadPlayers) {
+      if (!hasPlayers && els.autoToggle.checked) autoTick();
+      setupAuto();
+    }
   } catch {
     // Silent on transient network errors.
+  } finally {
+    scheduleNextLivePoll();
   }
 }
 
 function setupLivePolling() {
-  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
   showLivePlayers = els.liveToggle.checked;
   localStorage.setItem(LS_LIVE_ON, showLivePlayers ? '1' : '0');
   placeLivePlayers();
   if (showLivePlayers) {
     pollLivePlayers();
-    liveTimer = setInterval(pollLivePlayers, 3000);
   } else {
     els.liveStatus.textContent = 'Paused';
     els.liveStatus.className = 'live-status';
@@ -990,7 +1022,11 @@ function setupAuto() {
   if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
   localStorage.setItem(LS_AUTO_ON, els.autoToggle.checked ? '1' : '0');
   localStorage.setItem(LS_AUTO_MINS, els.autoInterval.value);
-  if (els.autoToggle.checked) autoTimer = setInterval(autoTick, Number(els.autoInterval.value) * 60000);
+  if (!els.autoToggle.checked) return;
+  const activeMs = Number(els.autoInterval.value) * 60000;
+  const isIdle = liveConfigured && (!liveServerOnline || livePlayers.length === 0);
+  const intervalMs = isIdle ? Math.max(activeMs, AUTO_IDLE_MS) : activeMs;
+  autoTimer = setInterval(autoTick, intervalMs);
 }
 
 fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
@@ -1022,7 +1058,11 @@ fetch('/api/worlds').then(r => (r.ok ? r.json() : [])).then(async list => {
 
   els.worldSelect.onchange = () => selectWorld(Number(els.worldSelect.value));
   els.playerSelect.onchange = () => selectPlayer(currentPlayerUid());
-  els.refreshBtn.onclick = () => selectPlayer(currentPlayerUid());
+  els.refreshBtn.onclick = () => {
+    const w = currentWorld();
+    if (w) loadFamilyStats(w);
+    selectPlayer(currentPlayerUid());
+  };
   els.autoToggle.onchange = setupAuto;
   els.autoInterval.onchange = setupAuto;
   els.liveToggle.onchange = setupLivePolling;
@@ -1144,3 +1184,132 @@ for (const m of MAPS) {
 }
 
 selectMap(activeMap);
+
+// --- Family Stats sidebar ---------------------------------------------------
+const familyEls = {
+  sidebar: document.getElementById('family-sidebar'),
+  collapseBtn: document.getElementById('family-collapse-btn'),
+  dayBadge: document.getElementById('world-day-badge'),
+  partyList: document.getElementById('party-power-list'),
+  paldeckList: document.getElementById('paldeck-list'),
+  baseList: document.getElementById('base-workers-list'),
+  expeditionNote: document.getElementById('expedition-note'),
+};
+
+const LS_FAMILY_COLLAPSED = 'palmap.familyCollapsed';
+const expandedParties = new Set();
+
+function applyFamilyCollapsed(collapsed) {
+  if (!familyEls.sidebar || !familyEls.collapseBtn) return;
+  familyEls.sidebar.classList.toggle('collapsed', collapsed);
+  familyEls.collapseBtn.textContent = collapsed ? '+' : '−';
+  familyEls.collapseBtn.title = collapsed ? 'Expand Family Stats' : 'Collapse Family Stats';
+  familyEls.collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+
+if (familyEls.collapseBtn) {
+  applyFamilyCollapsed(localStorage.getItem(LS_FAMILY_COLLAPSED) === '1');
+  familyEls.collapseBtn.onclick = () => {
+    const next = !familyEls.sidebar.classList.contains('collapsed');
+    localStorage.setItem(LS_FAMILY_COLLAPSED, next ? '1' : '0');
+    applyFamilyCollapsed(next);
+  };
+}
+
+function renderFamilyStats(stats) {
+  if (!familyEls.sidebar || !stats) return;
+  familyEls.sidebar.hidden = false;
+
+  if (stats.worldDay != null) {
+    familyEls.dayBadge.textContent = `Day ${stats.worldDay}`;
+    familyEls.dayBadge.hidden = false;
+  } else {
+    familyEls.dayBadge.hidden = true;
+  }
+
+  const list = Array.isArray(stats.players) ? stats.players : [];
+
+  // 1. Party Power leaderboard
+  const byPower = [...list].sort((a, b) => (b.partyPower || 0) - (a.partyPower || 0));
+  const maxPower = Math.max(1, ...byPower.map(p => p.partyPower || 0));
+  familyEls.partyList.innerHTML = byPower.map((p, idx) => {
+    const pct = Math.round(((p.partyPower || 0) / maxPower) * 100);
+    const isOpen = expandedParties.has(p.uid);
+    const palsHtml = (p.party || []).map(pal => {
+      const stars = pal.rank > 1 ? ` ★${pal.rank - 1}` : '';
+      return `<div class="party-pal-row">
+        <span>Lv.${pal.level} ${escapeHtml(pal.name)}${stars}</span>
+        <span class="party-pal-meta">IV ${pal.ivAvg}% · ${pal.power.toLocaleString()}</span>
+      </div>`;
+    }).join('');
+    return `<li class="stat-item clickable" data-uid="${escapeHtml(p.uid)}" title="Click to show/hide party Pals">
+      <div class="stat-row">
+        <span class="stat-name"><span class="stat-rank">#${idx + 1}</span>${escapeHtml(p.name)}${p.level != null ? `<span class="stat-lv">Lv.${p.level}</span>` : ''}</span>
+        <span class="stat-val">${(p.partyPower || 0).toLocaleString()}</span>
+      </div>
+      <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+      ${p.party?.length ? `<div class="party-pals" ${isOpen ? '' : 'hidden'}>${palsHtml}</div>` : ''}
+    </li>`;
+  }).join('');
+
+  familyEls.partyList.querySelectorAll('.stat-item[data-uid]').forEach(li => {
+    li.onclick = () => {
+      const uid = li.dataset.uid;
+      const box = li.querySelector('.party-pals');
+      if (!box) return;
+      if (expandedParties.has(uid)) { expandedParties.delete(uid); box.hidden = true; }
+      else { expandedParties.add(uid); box.hidden = false; }
+    };
+  });
+
+  // 2. Paldeck leaderboard
+  const byDex = [...list].sort((a, b) =>
+    (b.paldeck?.unique || 0) - (a.paldeck?.unique || 0) ||
+    (b.paldeck?.totalCaptured || 0) - (a.paldeck?.totalCaptured || 0));
+  const maxDex = Math.max(1, ...byDex.map(p => p.paldeck?.unique || 0));
+  familyEls.paldeckList.innerHTML = byDex.map((p, idx) => {
+    const uniq = p.paldeck?.unique || 0;
+    const caught = p.paldeck?.totalCaptured || 0;
+    const pct = Math.round((uniq / maxDex) * 100);
+    return `<li class="stat-item">
+      <div class="stat-row">
+        <span class="stat-name"><span class="stat-rank">#${idx + 1}</span>${escapeHtml(p.name)}</span>
+        <span class="stat-val">${uniq} <span class="stat-sub">(${caught} caught)</span></span>
+      </div>
+      <div class="stat-bar-bg"><div class="stat-bar-fill paldeck" style="width:${pct}%"></div></div>
+    </li>`;
+  }).join('');
+
+  // 3. Bases & Expeditions
+  const bases = Array.isArray(stats.bases) ? stats.bases : [];
+  if (bases.length === 0) {
+    familyEls.baseList.innerHTML = '<p class="note">No bases found in Level.sav.</p>';
+  } else {
+    familyEls.baseList.innerHTML = bases.map(b => {
+      const chips = (b.owners || []).map(o =>
+        `<span class="owner-chip">${escapeHtml(o.name)}: ${o.count}</span>`).join('');
+      return `<div class="base-card">
+        <div class="base-head">
+          <span>${escapeHtml(b.label)}</span>
+          <span>${b.totalWorkers} Pals</span>
+        </div>
+        <div class="base-owners">${chips || '<span class="note">No assigned workers</span>'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  familyEls.expeditionNote.textContent =
+    'Expeditions are tracked per guild/station in Palworld saves, so who clicked send is not recorded.';
+}
+
+async function loadFamilyStats(w) {
+  if (!w) return;
+  try {
+    const res = await fetch(`/api/family-stats?world=${encodeURIComponent(w.id)}`);
+    if (!res.ok) return;
+    const stats = await res.json();
+    renderFamilyStats(stats);
+  } catch (err) {
+    console.error('Family stats load error:', err);
+  }
+}

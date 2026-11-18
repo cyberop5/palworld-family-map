@@ -623,3 +623,218 @@ select:hover { border-color: var(--accent); }
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
+
+/* ---- Family Stats sidebar (right) ---- */
+.family-sidebar {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 312px;
+  max-height: calc(100% - 24px);
+  z-index: 1000;
+  background: rgba(20, 24, 33, .88);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.family-sidebar::-webkit-scrollbar { width: 8px; }
+.family-sidebar::-webkit-scrollbar-track { background: transparent; }
+.family-sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.family-sidebar.collapsed {
+  width: auto;
+}
+.family-sidebar.collapsed .family-body {
+  display: none;
+}
+
+.family-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(20, 24, 33, .95);
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+}
+.family-sidebar.collapsed .family-header {
+  border-bottom: 0;
+  border-radius: 10px;
+}
+.family-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.family-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.day-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(240, 160, 75, 0.16);
+  border: 1px solid rgba(240, 160, 75, 0.45);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.icon-btn {
+  padding: 2px 8px;
+  line-height: 1.2;
+  font-size: 14px;
+}
+
+.family-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.family-section:last-child {
+  border-bottom: 0;
+}
+.family-section h3 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+
+.stat-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stat-item {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.stat-item.clickable {
+  cursor: pointer;
+}
+.stat-item.clickable:hover {
+  border-color: #3a4356;
+}
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stat-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-rank {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-right: 4px;
+}
+.stat-lv {
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-left: 5px;
+}
+.stat-val {
+  font-size: 12.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stat-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.stat-bar-bg {
+  margin-top: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.stat-bar-fill.paldeck {
+  background: var(--found);
+}
+
+.party-pals {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+}
+.party-pal-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--text);
+}
+.party-pal-meta {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.base-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.base-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.base-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.base-owners {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.owner-chip {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+.expedition-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
