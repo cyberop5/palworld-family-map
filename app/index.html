@@ -13,10 +13,16 @@
 </head>
 <body>
 
+<button id="sidebar-open-btn" class="floating-menu-btn" type="button" aria-label="Open filters and save menu">☰ Filters</button>
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+
 <aside id="sidebar">
-  <header>
-    <h1>PalMap</h1>
-    <p class="tagline">Auto-tracking collectible map for Palworld</p>
+  <header class="sidebar-header">
+    <div class="sidebar-title">
+      <h1>PalMap</h1>
+      <p class="tagline">Auto-tracking collectible map for Palworld</p>
+    </div>
+    <button id="sidebar-collapse-btn" class="ghost icon-btn" type="button" title="Collapse sidebar" aria-expanded="true">−</button>
   </header>
 
   <!-- Search: type a Pal, boss or effigy and jump straight to it on the map. -->
@@ -158,6 +164,11 @@
 </aside>
 
 <div id="map"></div>
+
+<nav id="view-tabs" class="view-tabs" aria-label="View" hidden>
+  <button type="button" class="view-tab active" data-view="map" aria-pressed="true">Map</button>
+  <button type="button" class="view-tab" data-view="dashboard" aria-pressed="false">Dashboard</button>
+</nav>
 
 <script type="module" src="app.js?v=1.5.0"></script>
 </body>

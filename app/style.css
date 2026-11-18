@@ -20,6 +20,7 @@
 html, body {
   margin: 0;
   height: 100%;
+  height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -309,6 +310,7 @@ select:hover { border-color: var(--accent); }
 .cat-bar i {
   display: block;
   height: 100%;
+  height: 100dvh;
   width: 0;
   border-radius: 2px;
   background: var(--cat, var(--accent));
@@ -690,6 +692,7 @@ select:hover { border-color: var(--accent); }
   white-space: nowrap;
 }
 .icon-btn {
+  flex: 0 0 auto;
   padding: 2px 8px;
   line-height: 1.2;
   font-size: 14px;
@@ -853,4 +856,256 @@ select:hover { border-color: var(--accent); }
   flex-direction: column;
   gap: 3px;
   font-size: 11.5px;
+}
+
+
+/* ---- Collapsible left sidebar ---- */
+#sidebar header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+#sidebar .sidebar-title {
+  min-width: 0;
+}
+#sidebar.collapsed {
+  width: auto;
+}
+#sidebar.collapsed header {
+  align-items: center;
+  border-bottom: 0;
+  border-radius: 10px;
+}
+#sidebar.collapsed .tagline,
+#sidebar.collapsed .search,
+#sidebar.collapsed .panel,
+#sidebar.collapsed footer {
+  display: none;
+}
+
+/* ---- Floating menu button & drawer backdrop (mobile / portrait tablet) ---- */
+.floating-menu-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 990;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  background: rgba(20, 24, 33, .92);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+}
+.floating-menu-btn:hover {
+  border-color: var(--accent);
+}
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  background: rgba(0, 0, 0, .55);
+}
+
+/* ---- View switcher (Map | Dashboard) ---- */
+.view-tabs {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1050;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(20, 24, 33, .92);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
+}
+.view-tab {
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background .15s ease, color .15s ease;
+}
+.view-tab:hover {
+  color: var(--text);
+}
+.view-tab.active {
+  background: var(--accent);
+  color: #1a1205;
+}
+
+/* ---- Full-screen Dashboard mode ---- */
+body.view-dashboard #map,
+body.view-dashboard #sidebar,
+body.view-dashboard #sidebar-open-btn,
+body.view-dashboard #drawer-backdrop {
+  display: none !important;
+}
+body.view-dashboard .family-sidebar {
+  display: flex !important;
+  position: fixed;
+  inset: 0;
+  right: 0;
+  top: 0;
+  width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  border: 0;
+  background: var(--bg);
+  z-index: 1000;
+}
+body.view-dashboard .family-sidebar.collapsed .family-body {
+  display: grid;
+}
+body.view-dashboard #family-collapse-btn {
+  display: none;
+}
+body.view-dashboard .family-header {
+  border-radius: 0;
+  padding: 14px 20px;
+  padding-top: 58px;
+}
+body.view-dashboard .family-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  padding: 16px 20px 28px;
+  align-items: start;
+}
+body.view-dashboard .family-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+/* ---- Portrait iPad & narrower (< 960px) ---- */
+@media (max-width: 959px) {
+  .floating-menu-btn {
+    display: inline-flex;
+  }
+  body:not(.view-dashboard) .family-sidebar {
+    display: none !important;
+  }
+  #sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    max-height: 100%;
+    border-radius: 0 12px 12px 0;
+    border-left: 0;
+    z-index: 1100;
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+    background: rgba(20, 24, 33, .97);
+  }
+  #sidebar.drawer-open {
+    transform: translateX(0);
+  }
+  #sidebar.collapsed {
+    width: min(320px, 86vw);
+  }
+  #sidebar.collapsed .tagline,
+  #sidebar.collapsed .search,
+  #sidebar.collapsed .panel,
+  #sidebar.collapsed footer {
+    display: block;
+  }
+  #sidebar.collapsed header {
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+  }
+  .family-header h2 {
+    font-size: 17px;
+  }
+}
+
+/* ---- Phones (< 680px): bottom tab bar + safe areas ---- */
+@media (max-width: 679px) {
+  .view-tabs {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    justify-content: stretch;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(16, 19, 26, .96);
+  }
+  .view-tab {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    text-align: center;
+  }
+  .leaflet-bottom {
+    bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+  body.view-dashboard .family-header {
+    padding: 14px 16px;
+  }
+  body.view-dashboard .family-body {
+    grid-template-columns: 1fr;
+    padding: 12px 12px calc(76px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---- Touch devices (iPads & phones): prevent iOS zoom + bigger tap targets ---- */
+@media (pointer: coarse) {
+  #search-input,
+  .field select,
+  .auto-row select {
+    font-size: 16px;
+  }
+  .icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 16px;
+  }
+  .floating-menu-btn {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+  .owner-chip {
+    padding: 6px 11px;
+    font-size: 12.5px;
+  }
+  .stat-item.clickable {
+    padding: 10px 11px;
+  }
+  .head-actions button.link {
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+  .cat {
+    min-height: 38px;
+  }
+}
+
+/* Keep Leaflet zoom controls clear of the right-hand Family Stats panel on wide screens */
+@media (min-width: 960px) {
+  body:has(#family-sidebar:not([hidden]):not(.collapsed)) .leaflet-top.leaflet-right {
+    right: 328px;
+  }
+  body:has(#family-sidebar.collapsed:not([hidden])) .leaflet-top.leaflet-right {
+    top: 62px;
+  }
 }
