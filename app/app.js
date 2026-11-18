@@ -1193,11 +1193,11 @@ const familyEls = {
   partyList: document.getElementById('party-power-list'),
   paldeckList: document.getElementById('paldeck-list'),
   baseList: document.getElementById('base-workers-list'),
-  expeditionNote: document.getElementById('expedition-note'),
 };
 
 const LS_FAMILY_COLLAPSED = 'palmap.familyCollapsed';
 const expandedParties = new Set();
+const expandedBaseOwners = new Map(); // baseId -> ownerName
 
 function applyFamilyCollapsed(collapsed) {
   if (!familyEls.sidebar || !familyEls.collapseBtn) return;
@@ -1280,26 +1280,46 @@ function renderFamilyStats(stats) {
     </li>`;
   }).join('');
 
-  // 3. Bases & Expeditions
+  // 3. Bases
   const bases = Array.isArray(stats.bases) ? stats.bases : [];
   if (bases.length === 0) {
     familyEls.baseList.innerHTML = '<p class="note">No bases found in Level.sav.</p>';
   } else {
     familyEls.baseList.innerHTML = bases.map(b => {
-      const chips = (b.owners || []).map(o =>
-        `<span class="owner-chip">${escapeHtml(o.name)}: ${o.count}</span>`).join('');
+      const selectedOwner = expandedBaseOwners.get(b.id) || null;
+      const owners = b.owners || [];
+      const chips = owners.map(o => {
+        const isActive = selectedOwner === o.name;
+        const tip = (o.pals || []).map(p => `Lv.${p.level} ${p.name}`).join(', ');
+        return `<button type="button" class="owner-chip${isActive ? ' active' : ''}" data-base="${escapeHtml(b.id)}" data-owner="${escapeHtml(o.name)}" title="${escapeHtml(tip)}">${escapeHtml(o.name)}: ${o.count}</button>`;
+      }).join('');
+      const activeOwnerObj = selectedOwner ? owners.find(o => o.name === selectedOwner) : null;
+      const palsHtml = activeOwnerObj
+        ? `<div class="base-owner-pals">${(activeOwnerObj.pals || []).map(pal => {
+            const stars = pal.rank > 1 ? ` ★${pal.rank - 1}` : '';
+            return `<div class="party-pal-row"><span>${escapeHtml(pal.name)}${stars}</span><span class="party-pal-meta">Lv.${pal.level}</span></div>`;
+          }).join('')}</div>`
+        : '';
       return `<div class="base-card">
         <div class="base-head">
           <span>${escapeHtml(b.label)}</span>
           <span>${b.totalWorkers} Pals</span>
         </div>
         <div class="base-owners">${chips || '<span class="note">No assigned workers</span>'}</div>
+        ${palsHtml}
       </div>`;
     }).join('');
-  }
 
-  familyEls.expeditionNote.textContent =
-    'Expeditions are tracked per guild/station in Palworld saves, so who clicked send is not recorded.';
+    familyEls.baseList.querySelectorAll('.owner-chip[data-base]').forEach(btn => {
+      btn.onclick = () => {
+        const baseId = btn.dataset.base;
+        const owner = btn.dataset.owner;
+        if (expandedBaseOwners.get(baseId) === owner) expandedBaseOwners.delete(baseId);
+        else expandedBaseOwners.set(baseId, owner);
+        renderFamilyStats(stats);
+      };
+    });
+  }
 }
 
 async function loadFamilyStats(w) {

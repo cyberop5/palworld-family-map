@@ -348,14 +348,12 @@ export function buildFamilyStats(worldDir, playerFiles, resolveNameFn) {
   const levelPlayers = new Map(); // playerUId -> { name, level, exp, hp }
   const pals = [];
   const bases = [];
-  let guildExpeditionCount = 0;
 
   if (fs.existsSync(levelPath)) {
     const raw = decompressSav(new Uint8Array(fs.readFileSync(levelPath)));
     const slices = extractWorldSlices(raw, new Set([
       'CharacterSaveParameterMap',
       'BaseCampSaveData',
-      'GuildExtraSaveDataMap',
     ]));
 
     if (slices.CharacterSaveParameterMap) {
@@ -397,13 +395,6 @@ export function buildFamilyStats(worldDir, playerFiles, resolveNameFn) {
       });
     }
 
-    if (slices.GuildExtraSaveDataMap) {
-      const extras = parseMapSlice(slices.GuildExtraSaveDataMap, false, true);
-      for (const [, v] of extras) {
-        if (v?.Expedition) guildExpeditionCount++;
-      }
-    }
-
     // Group Pals by container (party vs base worker)
     const partyByContainer = new Map();
     for (const sp of pals) {
@@ -417,7 +408,12 @@ export function buildFamilyStats(worldDir, playerFiles, resolveNameFn) {
         const ownerName = levelPlayers.get(ownerId)?.name
           || playerRecords.get(ownerId)?.cachedName
           || (ownerId ? `Player (${ownerId.slice(0, 6)})` : 'Unowned');
-        base.ownersMap.set(ownerName, (base.ownersMap.get(ownerName) || 0) + 1);
+        if (!base.ownersMap.has(ownerName)) base.ownersMap.set(ownerName, []);
+        base.ownersMap.get(ownerName).push({
+          name: sp.NickName || prettyPalId(sp.CharacterID),
+          level: Number(sp.Level) || 1,
+          rank: Math.max(1, Number(sp.Rank) || 1),
+        });
       } else {
         if (!partyByContainer.has(cid)) partyByContainer.set(cid, []);
         partyByContainer.get(cid).push(sp);
@@ -461,7 +457,11 @@ export function buildFamilyStats(worldDir, playerFiles, resolveNameFn) {
   const basesOut = bases.map(({ workerContainerId, ownersMap, ...b }) => ({
     ...b,
     owners: [...ownersMap.entries()]
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, ownerPals]) => ({
+        name,
+        count: ownerPals.length,
+        pals: ownerPals.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name)),
+      }))
       .sort((a, b) => b.count - a.count),
   }));
 
@@ -471,7 +471,6 @@ export function buildFamilyStats(worldDir, playerFiles, resolveNameFn) {
     hostLevel,
     players: playersOut,
     bases: basesOut,
-    guildExpeditionCount,
     updatedAt: new Date().toISOString(),
   };
 }
