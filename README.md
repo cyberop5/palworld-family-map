@@ -1,10 +1,26 @@
-# PalMap
+# Palworld Family Map (PalMap)
 
-**A Palworld map that ticks itself off.**
+**A Palworld map that ticks itself off — extended for family dedicated servers.**
 
-PalMap reads your save file and marks everything you've already collected — effigies, bosses,
-fast travel points, watchtowers, notes and pickups. Keep it open while you play and it updates
-itself.
+Based on [PalMap](https://github.com/voidpossum/PalMap), **Palworld Family Map** reads your save file and marks everything you've already collected — effigies, bosses, fast travel points, watchtowers, notes and pickups. Keep it open while you play and it updates itself.
+
+### Family Server Additions
+- **Docker & Dedicated Server Ready**: Runs headless in Docker (`ghcr.io/cyberop5/palworld-family-map`) with read-only `/palworld` save mounts and persistent `/data` storage (`progress.json`, `players-cache.json`).
+- **Multi-Player Save Selector**: Switch between family members' `.sav` files in the same dedicated server world.
+- **Player Name Resolution (`palworld-bedtime-warden`)**: Automatically maps Palworld player save UIDs to real in-game character names using live REST API polls and historical player records from [palworld-bedtime-warden](https://github.com/cyberop5/palworld-bedtime-warden) (`BEDTIME_WARDEN_URL/api/history`).
+- **Live Player Positions**: Displays online players on the map via the Palworld Dedicated Server REST API (`/v1/api/players`).
+- **Presence-Aware Adaptive Sync**: Slows down both live-player polling (15s idle / 30s offline) and save-file auto-sync (10m idle) when no players are online, then automatically resumes fast polling (3s live / configured `Auto` interval) as soon as someone logs in.
+
+### Environment Variables (Docker / Server Mode)
+
+| Variable | Default | Description |
+|---|---|---|
+| `HOST` / `PORT` | `127.0.0.1` / `5173` | Bind address and HTTP port (`0.0.0.0` / `8080` in Docker). |
+| `PAL_SAVES` | Local AppData | Path to Palworld `SaveGames` directory. |
+| `DATA_DIR` | Repo root | Directory for `progress.json` and `players-cache.json`. |
+| `PALWORLD_API_BASE_URL` | — | Optional Palworld REST API URL (e.g. `http://palworld-server:8212`). |
+| `PALWORLD_ADMIN_PASSWORD` | — | Admin password for Palworld REST API Basic Auth. |
+| `BEDTIME_WARDEN_URL` | — | Optional [palworld-bedtime-warden](https://github.com/cyberop5/palworld-bedtime-warden) URL (e.g. `http://palworld-bedtime-warden:8080`) to resolve historical player UIDs to character names. |
 
 ![PalMap](docs/palmapdemo.png)
 
